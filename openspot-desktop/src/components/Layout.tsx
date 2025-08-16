@@ -1,11 +1,24 @@
-import React, { ReactNode, useEffect } from 'react';
+import React, { ReactNode, useEffect, Suspense } from 'react';
 import { Box, Drawer, List, ListItem, ListItemIcon, ListItemText } from '@mui/material';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, LibraryMusic, ExploreOutlined, Favorite, QueueMusic, Info } from '@mui/icons-material';
+import { Home, Search, Favorite, QueueMusic, Info } from '@mui/icons-material';
 import Player from './Player';
-import FullScreenPlayer from './FullScreenPlayer';
 import AudioController from './AudioController';
 import { useMusic } from '../contexts/MusicContext';
+
+// Lazy load FullScreenPlayer
+const FullScreenPlayer = React.lazy(() => import('./FullScreenPlayer'));
+
+// Constants
+const drawerWidth = 240;
+
+const menuItems = [
+  { text: 'Home', icon: <Home />, path: '/' },
+  { text: 'Search', icon: <Search />, path: '/search' },
+  { text: 'Liked Songs', icon: <Favorite />, path: '/liked' },
+  { text: 'Recently Played', icon: <QueueMusic />, path: '/recent' },
+  { text: 'About', icon: <Info />, path: '/about' },
+];
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,48 +27,30 @@ interface LayoutProps {
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const { dispatch } = useMusic();
-  
-  const menuItems = [
-    { text: 'Home', icon: <Home />, path: '/' },
-    { text: 'Search', icon: <Search />, path: '/search' },
-    { text: 'Liked Songs', icon: <Favorite />, path: '/liked' },
-    { text: 'Recently Played', icon: <QueueMusic />, path: '/recent' },
-    { text: 'About', icon: <Info />, path: '/about' },
-  ];
 
-  const isActive = (itemPath: string) => {
-    if (itemPath === '/') {
-      return location.pathname === '/';
-    }
-    return location.pathname.startsWith(itemPath);
-  };
-
-  const drawerWidth = 240;
+  const isActive = (itemPath: string) =>
+    itemPath === '/' ? location.pathname === '/' : location.pathname.startsWith(itemPath);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input, textarea, or select
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) {
-        return;
-      }
-      // Spacebar (play/pause)
-      if (e.code === 'Space') {
+      const target = e.target as HTMLElement;
+      const tagName = target.tagName;
+
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tagName) || target.isContentEditable) return;
+
+      if (e.code === 'Space' || e.code === 'MediaPlayPause') {
         e.preventDefault();
         dispatch({ type: 'TOGGLE_PLAY_PAUSE' });
       }
-      // Media play/pause key (if supported)
-      if (e.code === 'MediaPlayPause') {
-        dispatch({ type: 'TOGGLE_PLAY_PAUSE' });
-      }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [dispatch]);
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      {/* Draggable Top Bar for Electron window */}
+      {/* Draggable Top Bar */}
       <Box
         sx={{
           position: 'fixed',
@@ -69,25 +64,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           userSelect: 'none',
         }}
       />
+
       {/* Sidebar */}
       <Drawer
         variant="permanent"
         sx={{
           width: drawerWidth,
           flexShrink: 0,
-          zIndex: 100, // Lower than player
           '& .MuiDrawer-paper': {
             width: drawerWidth,
             boxSizing: 'border-box',
-            backgroundColor: '#000000',
+            backgroundColor: '#000',
             borderRight: '1px solid #2a2a2a',
             paddingTop: '24px',
-            zIndex: 100, // Lower than player
             userSelect: 'none',
             WebkitAppRegion: 'no-drag',
           },
         }}
       >
+        {/* Logo */}
         <Box sx={{ padding: '0 24px', marginBottom: '32px', userSelect: 'none', WebkitAppRegion: 'no-drag' }}>
           <Box
             component="img"
@@ -97,17 +92,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               height: 32,
               width: 'auto',
               filter: 'brightness(0) invert(1)',
-              userSelect: 'none',
-              WebkitAppRegion: 'no-drag',
             }}
             onError={(e) => {
-              // Fallback to text if logo doesn't exist
               const img = e.currentTarget as HTMLImageElement;
               img.style.display = 'none';
-              const next = img.nextElementSibling as HTMLElement | null;
-              if (next) {
-                next.style.display = 'block';
-              }
+              const next = img.nextElementSibling as HTMLElement;
+              if (next) next.style.display = 'block';
             }}
           />
           <Box
@@ -117,57 +107,41 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               fontWeight: 'bold',
               color: '#1db954',
               marginTop: '16px',
-              userSelect: 'none',
-              WebkitAppRegion: 'no-drag',
             }}
           >
             OpenSpot
           </Box>
         </Box>
-        
+
+        {/* Menu Items */}
         <List>
-          {menuItems.map((item) => (
-            <ListItem
-              key={item.text}
-              component={Link}
-              to={item.path}
-              sx={{
-                color: isActive(item.path) ? '#ffffff' : '#b3b3b3',
-                textDecoration: 'none',
-                '&:hover': {
-                  color: '#ffffff',
-                },
-                paddingLeft: '24px',
-                paddingRight: '24px',
-                background: isActive(item.path) ? 'rgba(29,185,84,0.08)' : 'none',
-                borderRadius: isActive(item.path) ? '8px' : 0,
-                userSelect: 'none',
-                WebkitAppRegion: 'no-drag',
-              }}
-            >
-              <ListItemIcon
+          {menuItems.map((item) => {
+            const active = isActive(item.path);
+            return (
+              <ListItem
+                key={item.text}
+                component={Link}
+                to={item.path}
                 sx={{
-                  color: 'inherit',
-                  minWidth: '40px',
-                  userSelect: 'none',
-                  WebkitAppRegion: 'no-drag',
+                  color: active ? '#fff' : '#b3b3b3',
+                  textDecoration: 'none',
+                  '&:hover': { color: '#fff' },
+                  paddingLeft: '24px',
+                  paddingRight: '24px',
+                  background: active ? 'rgba(29,185,84,0.08)' : 'none',
+                  borderRadius: active ? '8px' : 0,
                 }}
               >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText 
-                primary={item.text}
-                sx={{
-                  '& .MuiListItemText-primary': {
-                    fontSize: '14px',
-                    fontWeight: 500,
-                  },
-                  userSelect: 'none',
-                  WebkitAppRegion: 'no-drag',
-                }}
-              />
-            </ListItem>
-          ))}
+                <ListItemIcon sx={{ color: 'inherit', minWidth: '40px' }}>{item.icon}</ListItemIcon>
+                <ListItemText
+                  primary={item.text}
+                  sx={{
+                    '& .MuiListItemText-primary': { fontSize: '14px', fontWeight: 500 },
+                  }}
+                />
+              </ListItem>
+            );
+          })}
         </List>
       </Drawer>
 
@@ -184,24 +158,27 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         }}
       >
         <AudioController />
-        {/* Content Area */}
         <Box
           sx={{
             flexGrow: 1,
             overflow: 'auto',
             backgroundColor: '#121212',
-            marginBottom: '90px', // Space for player
+            marginBottom: '90px',
           }}
         >
           {children}
         </Box>
-        
-        {/* Player */}
+
         <Player sx={{ zIndex: 1200, position: 'fixed', left: drawerWidth, right: 0 }} />
-        <FullScreenPlayer />
+
+        {/* Lazy loaded FullScreenPlayer */}
+        <Suspense fallback={null}>
+          <FullScreenPlayer />
+        </Suspense>
       </Box>
     </Box>
   );
 };
 
-export default Layout; 
+export default Layout;
+
