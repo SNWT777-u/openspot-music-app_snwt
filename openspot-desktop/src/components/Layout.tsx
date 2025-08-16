@@ -13,7 +13,7 @@ const FullScreenPlayer = React.lazy(() => import('./FullScreenPlayer'));
 const drawerWidth = 240;
 
 const menuItems = [
-  { text: 'Home', icon: <Home />, path: '/' },
+  { text: 'Home', icon: <Home />, path: '/home' },
   { text: 'Search', icon: <Search />, path: '/search' },
   { text: 'Liked Songs', icon: <Favorite />, path: '/liked' },
   { text: 'Recently Played', icon: <QueueMusic />, path: '/recent' },
@@ -29,7 +29,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { dispatch } = useMusic();
 
   const isActive = (itemPath: string) =>
-    itemPath === '/' ? location.pathname === '/' : location.pathname.startsWith(itemPath);
+    itemPath === '/home' ? (location.pathname === '/home' || location.pathname === '/') : location.pathname.startsWith(itemPath);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

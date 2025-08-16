@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import './App.css';
@@ -71,7 +71,8 @@ const App: React.FC = () => {
           <Box sx={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>
             <Layout>
               <Routes>
-                <Route path="/" element={<Home />} />
+                <Route path="/" element={<Navigate to="/home" replace />} />
+                <Route path="/home" element={<Home />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/liked" element={<LikedSongs />} />
                 <Route path="/recent" element={<RecentlyPlayed />} />
