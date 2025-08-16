@@ -15,7 +15,7 @@ import {
   Button,
   Chip,
 } from '@mui/material';
-import { Favorite, PlayArrow, LibraryMusic, QueueMusic } from '@mui/icons-material';
+import { Favorite, PlayArrow, QueueMusic } from '@mui/icons-material';
 import { useMusic, Track } from '../contexts/MusicContext';
 import { useLocation } from 'react-router-dom';
 

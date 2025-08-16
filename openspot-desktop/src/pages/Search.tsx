@@ -8,8 +8,6 @@ import {
   CardContent,
   CardMedia,
   InputAdornment,
-  Chip,
-  Stack,
   CircularProgress,
   IconButton,
 } from '@mui/material';

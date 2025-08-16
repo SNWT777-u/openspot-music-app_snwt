@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, Grid, Card, CardContent, CardMedia, IconButton } from '@mui/material';
-import { PlayArrow, Pause, Favorite, FavoriteBorder } from '@mui/icons-material';
+import { PlayArrow, Pause, Favorite } from '@mui/icons-material';
 import { useMusic } from '../contexts/MusicContext';
 
 const LikedSongs: React.FC = () => {
