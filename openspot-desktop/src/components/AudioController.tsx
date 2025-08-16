@@ -38,17 +38,58 @@ const AudioController: React.FC = () => {
     
     if (streamUrl) {
       try {
-        // Set the stream URL directly for immediate streaming
-        audio.src = streamUrl;
-        audio.preload = 'auto'; // Enable preloading for better buffering
+        // Download the entire file first, then play locally (avoids streaming connection issues)
+        const downloadAndPlay = async () => {
+          try {
+            console.log('🎵 Downloading audio file to avoid streaming connection issues');
+            
+            // Fetch the entire file as a blob
+            const response = await fetch(streamUrl, {
+              method: 'GET',
+              headers: {
+                'Connection': 'close',
+                'Cache-Control': 'no-cache'
+              }
+            });
+            
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            // Convert to blob and create local URL
+            const blob = await response.blob();
+            const localUrl = URL.createObjectURL(blob);
+            
+            // Set local URL and play
+            audio.src = localUrl;
+            audio.preload = 'auto';
+            audio.load();
+            
+            // If already playing, start immediately
+            if (state.isPlaying) {
+              audio.play().catch(err => console.error('Play failed:', err));
+            }
+            
+            console.log('🎵 Audio downloaded and playing locally - network connection released');
+            
+            // Clean up the blob URL after a delay
+            setTimeout(() => {
+              URL.revokeObjectURL(localUrl);
+            }, 5000);
+            
+          } catch (error) {
+            console.error('Download failed, falling back to streaming:', error);
+            // Fallback to streaming if download fails
+            audio.src = streamUrl;
+            audio.preload = 'auto';
+            audio.load();
+            
+            if (state.isPlaying) {
+              audio.play().catch(err => console.error('Play failed:', err));
+            }
+          }
+        };
         
-        // Load the audio metadata
-        audio.load();
+        downloadAndPlay();
         
-        // If already playing, start immediately
-        if (state.isPlaying) {
-          audio.play().catch(err => console.error('Play failed:', err));
-        }
       } catch (error) {
         console.error('Streaming setup failed:', error);
         setError('Streaming failed.');
@@ -166,6 +207,13 @@ const AudioController: React.FC = () => {
     const onError = (e: Event) => {
       console.error('Audio error:', e);
       setError('Audio playback error');
+      
+      // Clean up network resources on error immediately
+      if (audioRef.current) {
+        audioRef.current.src = '';
+        audioRef.current.load();
+        console.log('🎵 AudioController: Network resources cleaned up due to error');
+      }
     };
     
     audio.addEventListener('timeupdate', updateTime);
@@ -181,7 +229,53 @@ const AudioController: React.FC = () => {
     };
   }, [dispatch, state.repeatMode]);
 
-  return <audio ref={audioRef} preload="auto" style={{ display: 'none' }} />;
+  // Cleanup network resources when component unmounts or track changes
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.src = '';
+        audioRef.current.load();
+        console.log('🎵 AudioController: Network resources cleaned up');
+      }
+    };
+  }, [state.currentTrack?.id]);
+
+  // Aggressive network cleanup function
+  const forceNetworkCleanup = () => {
+    if (audioRef.current) {
+      console.log('🎵 AudioController: Force cleaning up network resources');
+      
+      // Completely break the streaming connection
+      audioRef.current.src = '';
+      audioRef.current.load();
+      
+      // Force garbage collection hint
+      if (window.gc) {
+        window.gc();
+      }
+      
+      // Clear any remaining network requests
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => {
+            if (name.includes('audio') || name.includes('stream')) {
+              caches.delete(name);
+            }
+          });
+        });
+      }
+    }
+  };
+
+  // Add network cleanup on play state change
+  useEffect(() => {
+    if (!state.isPlaying && audioRef.current) {
+      // Force cleanup when pausing
+      setTimeout(forceNetworkCleanup, 100);
+    }
+  }, [state.isPlaying]);
+
+  return <audio ref={audioRef} preload="none" style={{ display: 'none' }} />;
 };
 
 export default AudioController; 

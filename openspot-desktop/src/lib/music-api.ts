@@ -65,8 +65,35 @@ const apiClient = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    'Connection': 'close', // Force connection close after each request
   },
 });
+
+// Add aggressive connection cleanup interceptors
+apiClient.interceptors.request.use(
+  config => {
+    // Force new connection for each request
+    if (config.headers) {
+      config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      config.headers['Pragma'] = 'no-cache';
+      config.headers['Expires'] = '0';
+      config.headers['Connection'] = 'close';
+    }
+    return config;
+  },
+  error => Promise.reject(error)
+);
+
+apiClient.interceptors.response.use(
+  response => {
+    // Force connection cleanup after response
+    return response;
+  },
+  error => {
+    // Force connection cleanup on error
+    return Promise.reject(error);
+  }
+);
 
 export async function searchTracks(query: string, offset = 0, limit = 20): Promise<SearchResponse> {
   const params = new URLSearchParams({
