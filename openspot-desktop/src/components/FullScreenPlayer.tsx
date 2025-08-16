@@ -14,17 +14,20 @@ const FullScreenPlayer: React.FC = () => {
 
   if (!track) return null;
 
-  // Download song handler  
-const handleDownload = async () => {  // made it much more efficient for big files 
+ // Download song handler
+ const handleDownload = async () => {
   setDownloading(true);
   try {
     const url = await getStreamUrl(track.id);
+    const response = await fetch(url);
+    const blob = await response.blob();
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `${track.title} - ${track.artist}.mp3`;
+    a.href = window.URL.createObjectURL(blob);
+    a.download = `${track.title} - ${track.artist}.flac`;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
   } catch (err) {
-    console.error(err);
     alert('Failed to download song.');
   } finally {
     setDownloading(false);
