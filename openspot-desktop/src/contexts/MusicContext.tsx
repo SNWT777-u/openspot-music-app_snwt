@@ -94,7 +94,8 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
       return {
         ...state,
         currentTrack: action.payload,
-        isPlaying: true,
+        // Preserve the current playing state instead of always setting to true
+        isPlaying: state.isPlaying,
         currentIndex,
       };
     }

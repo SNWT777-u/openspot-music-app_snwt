@@ -1,9 +1,10 @@
 {
   "name": "openspot-music-electron",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "main": "public/electron.js",
   "homepage": "./",
   "license": "MIT",
+  "description": "OpenSpot Music Desktop App",
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",

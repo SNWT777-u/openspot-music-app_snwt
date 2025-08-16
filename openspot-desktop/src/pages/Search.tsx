@@ -13,7 +13,7 @@ import {
 } from '@mui/material';
 import { Search as SearchIcon, PlayArrow, Pause, Favorite, FavoriteBorder } from '@mui/icons-material';
 import { useMusic, Track } from '../contexts/MusicContext';
-import { searchTracks, getOptimalImage } from '../lib/music-api';
+import { searchTracks, convertAPITrackToTrack, APITrack } from '../lib/music-api';
 
 const Search: React.FC = () => {
   const { state, dispatch } = useMusic();
@@ -31,14 +31,14 @@ const Search: React.FC = () => {
       setLoading(true);
       try {
         const data = await searchTracks(query);
-        // Map images to coverUrl using getOptimalImage
-        setSearchResults(
-          data.tracks.map(track => ({
-            ...track,
-            coverUrl: getOptimalImage((track as any).images),
-            liked: track.liked ?? false,
-          }))
-        );
+        // Map API response to Track type using the helper function
+        const tracks = data.tracks.map((track: APITrack) => {
+          const convertedTrack = convertAPITrackToTrack(track);
+          // Check if this track is already liked
+          convertedTrack.liked = state.likedTracks.some(t => t.id === convertedTrack.id);
+          return convertedTrack;
+        });
+        setSearchResults(tracks);
       } catch (err: any) {
         setError('Failed to fetch search results.');
         setSearchResults([]);

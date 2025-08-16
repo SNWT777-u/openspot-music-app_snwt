@@ -8,12 +8,53 @@ export interface Track {
   duration: number;
   coverUrl: string;
   audioUrl: string;
-  liked?: boolean;
+  liked: boolean; // Make this required instead of optional
   // Add any other fields as needed
 }
 
+// API response types that match the actual search API
+export interface APITrack {
+  id: number;
+  title: string;
+  artist: string;
+  artistId: number;
+  albumTitle: string;
+  albumCover: string;
+  albumId: string;
+  releaseDate: string;
+  genre: string;
+  duration: number;
+  audioQuality: {
+    maximumBitDepth: number;
+    maximumSamplingRate: number;
+    isHiRes: boolean;
+  };
+  version: string | null;
+  label: string;
+  labelId: number;
+  upc: string;
+  mediaCount: number;
+  parental_warning: boolean;
+  streamable: boolean;
+  purchasable: boolean;
+  previewable: boolean;
+  genreId: number;
+  genreSlug: string;
+  genreColor: string;
+  releaseDateStream: string;
+  releaseDateDownload: string;
+  maximumChannelCount: number;
+  images: {
+    small: string;
+    thumbnail: string;
+    large: string;
+    back: string | null;
+  };
+  isrc: string;
+}
+
 export interface SearchResponse {
-  tracks: Track[];
+  tracks: APITrack[];
   total: number;
 }
 
@@ -43,6 +84,26 @@ export async function getStreamUrl(trackId: string): Promise<string> {
   return response.data.url;
 }
 
-export function getOptimalImage(images: { small: string; thumbnail: string; large: string }): string {
-  return images?.large || images?.small || images?.thumbnail || '';
+// Helper function to convert API track to context Track
+export function convertAPITrackToTrack(apiTrack: APITrack): Track {
+  // Extract image URL from the images object
+  let coverUrl = '';
+  if (apiTrack.images) {
+    // Use large image if available, fallback to small, then thumbnail
+    coverUrl = apiTrack.images.large || apiTrack.images.small || apiTrack.images.thumbnail || '';
+  } else if (apiTrack.albumCover) {
+    // Fallback to albumCover if images object is not available
+    coverUrl = apiTrack.albumCover;
+  }
+  
+  return {
+    id: apiTrack.id.toString(), // Convert number to string
+    title: apiTrack.title,
+    artist: apiTrack.artist,
+    album: apiTrack.albumTitle || 'Unknown Album',
+    duration: apiTrack.duration,
+    coverUrl: coverUrl,
+    audioUrl: '', // We'll get this from getStreamUrl when needed
+    liked: false // Default to false, will be updated by context
+  };
 } 

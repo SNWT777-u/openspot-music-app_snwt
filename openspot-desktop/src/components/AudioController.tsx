@@ -31,43 +31,99 @@ const AudioController: React.FC = () => {
     fetchStream();
   }, [state.currentTrack]);
 
-  // Set audio src when streamUrl changes and force reload
+  // Set audio src when streamUrl changes and start streaming immediately
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
     
-    const fetchAndPlay = async () => {
-      if (streamUrl) {
-        try {
-          const response = await fetch(streamUrl);
-          const blob = await response.blob();
-          const objectUrl = URL.createObjectURL(blob);
-          audio.src = objectUrl;
-          audio.load();
-          if (state.isPlaying) {
-            await audio.play();
-          }
-        } catch (error) {
-          setError('Streaming failed.');
+    if (streamUrl) {
+      try {
+        // Set the stream URL directly for immediate streaming
+        audio.src = streamUrl;
+        audio.preload = 'auto'; // Enable preloading for better buffering
+        
+        // Load the audio metadata
+        audio.load();
+        
+        // If already playing, start immediately
+        if (state.isPlaying) {
+          audio.play().catch(err => console.error('Play failed:', err));
         }
-      } else {
-        audio.src = '';
+      } catch (error) {
+        console.error('Streaming setup failed:', error);
+        setError('Streaming failed.');
       }
-    };
+    } else {
+      audio.src = '';
+    }
+  }, [streamUrl]);
   
-    fetchAndPlay();
-  }, [streamUrl, state.isPlaying]);
+  // Add event listeners for better streaming experience (only once)
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    
+    const onCanPlay = () => {
+      console.log('🎵 Audio can start playing - buffering sufficient');
+      // Don't auto-play here - let the main play/pause useEffect handle it
+    };
+    
+    const onCanPlayThrough = () => {
+      console.log('🎵 Audio can play through without interruption');
+    };
+    
+    const onWaiting = () => {
+      console.log('🎵 Audio buffering...');
+    };
+    
+    const onPlaying = () => {
+      console.log('🎵 Audio is now playing');
+    };
+    
+    audio.addEventListener('canplay', onCanPlay);
+    audio.addEventListener('canplaythrough', onCanPlayThrough);
+    audio.addEventListener('waiting', onWaiting);
+    audio.addEventListener('playing', onPlaying);
+    
+    return () => {
+      audio.removeEventListener('canplay', onCanPlay);
+      audio.removeEventListener('canplaythrough', onCanPlayThrough);
+      audio.removeEventListener('waiting', onWaiting);
+      audio.removeEventListener('playing', onPlaying);
+    };
+  }, []); // Remove state.isPlaying dependency
   
   // Play/pause
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    
+    console.log('🎵 Play/Pause state change:', {
+      isPlaying: state.isPlaying,
+      hasSrc: !!audio.src,
+      readyState: audio.readyState,
+      currentTime: audio.currentTime,
+      paused: audio.paused,
+      audioElement: audio
+    });
+    
     if (state.isPlaying) {
-      if (audio.src) audio.play();
+      if (audio.src && audio.readyState >= 2) { // HAVE_CURRENT_DATA or higher
+        console.log('🎵 Attempting to play audio');
+        audio.play().catch(err => console.error('Play failed:', err));
+      } else {
+        console.log('🎵 Audio not ready to play yet');
+      }
     } else {
-      audio.pause();
+      console.log('🎵 Pausing audio - calling audio.pause()');
+      try {
+        audio.pause();
+        console.log('🎵 Audio paused successfully, paused state:', audio.paused);
+      } catch (error) {
+        console.error('🎵 Error pausing audio:', error);
+      }
     }
-  }, [state.isPlaying, streamUrl]);
+  }, [state.isPlaying]);
 
   // Volume
   useEffect(() => {
@@ -89,31 +145,43 @@ const AudioController: React.FC = () => {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+    
     const updateTime = () => {
       dispatch({ type: 'SET_CURRENT_TIME', payload: audio.currentTime });
     };
+    
     const updateDuration = () => {
       dispatch({ type: 'SET_DURATION', payload: audio.duration || 0 });
     };
+    
     const onEnded = () => {
       if (state.repeatMode === 'track') {
         audio.currentTime = 0;
-        audio.play();
+        audio.play().catch(err => console.error('Replay failed:', err));
       } else {
         dispatch({ type: 'NEXT_TRACK' });
       }
     };
+    
+    const onError = (e: Event) => {
+      console.error('Audio error:', e);
+      setError('Audio playback error');
+    };
+    
     audio.addEventListener('timeupdate', updateTime);
     audio.addEventListener('loadedmetadata', updateDuration);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
+    
     return () => {
       audio.removeEventListener('timeupdate', updateTime);
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
   }, [dispatch, state.repeatMode]);
 
-  return <audio ref={audioRef} preload="metadata" style={{ display: 'none' }} />;
+  return <audio ref={audioRef} preload="auto" style={{ display: 'none' }} />;
 };
 
 export default AudioController; 

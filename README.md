@@ -128,7 +128,7 @@ eas build --platform android --profile production
 
 ### Download Links
 
-- **macOS DMG**: [OpenSpot.Music-2.0.2-arm64.zip](https://github.com/BlackHatDevX/openspot-music-app/releases/download/v2.0.2/OpenSpot.Music-2.0.2-arm64-mac.zip)
+- **macOS DMG**: [OpenSpot.Music-2.0.3-arm64.zip](https://github.com/BlackHatDevX/openspot-music-app/releases/download/v2.0.3/OpenSpot.Music-2.0.3-arm64.dmg)
 - Run this if you are facing damaged app issue after installation.
   ```bash
   xattr -rd com.apple.quarantine /Applications/OpenSpot\ Music.app
