@@ -60,12 +60,12 @@
 This repository contains **two complete music streaming applications**:
 
 ### 🎵 **OpenSpot Mobile** (React Native + Expo)
-- **Platforms**: Android, iOS
+- **Platforms**: Android, iOS(WIP)
 - **Location**: `openspot-music-mobile/`
 - **Features**: Native mobile experience with offline downloads, background playback, and persistent state
 
 ### 🖥️ **OpenSpot Desktop** (Electron + React)
-- **Platforms**: macOS, Windows, Linux
+- **Platforms**: macOS, Windows(WIP), Linux(WIP)
 - **Location**: `openspot-music-electron/`
 - **Features**: Desktop-optimized interface with global audio controls, window management, and local storage
 
@@ -92,7 +92,7 @@ Stay updated with **version releases**, and **important announcements** on offic
 ### Download Links
 
 - **Android APK**: [OpenSpot-2.0.3-release.apk](https://github.com/BlackHatDevX/openspot-music-app/releases/download/v2.0.3/OpenSpot-2.0.3-release.apk)
-- **iOS**: Maintainer Needed
+- **iOS**: [Maintainer Needed](https://github.com/BlackHatDevX/openspot-music-app/issues/15)
 
 ### Development Setup
 
@@ -132,8 +132,8 @@ eas build --platform android --profile production
 - Run this if you are facing damaged app issue after installation.
   ```bash
   xattr -rd com.apple.quarantine /Applications/OpenSpot\ Music.app
-- **Windows EXE**: Coming Soon!
-- **Linux DEB**: Coming Soon!
+- **Windows EXE**: [Coming Soon!](https://github.com/BlackHatDevX/openspot-music-app/issues/18)
+- **Linux DEB**: [Coming Soon!](https://github.com/BlackHatDevX/openspot-music-app/issues/14)
 
 ### Development Setup
 
@@ -251,3 +251,4 @@ This project is open-source and licensed under the MIT License. See the `LICENSE
   <br />
   <em>Your support helps us continue developing amazing free music apps for everyone.</em>
 </p> 
+
