@@ -58,79 +58,44 @@ export interface SearchResponse {
   total: number;
 }
 
-const API_BASE_URL = process.env.ELECTRON_APP_API_BASE_URL;
+const API_BASE_URL_EXAMPLE = 'https://dab.yeet.su/ap';
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_BASE_URL_EXAMPLE,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
-    'Connection': 'close', // Force connection close after each request
   },
 });
 
-// Add aggressive connection cleanup interceptors
-apiClient.interceptors.request.use(
-  config => {
-    // Force new connection for each request
-    if (config.headers) {
-      config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
-      config.headers['Pragma'] = 'no-cache';
-      config.headers['Expires'] = '0';
-      config.headers['Connection'] = 'close';
-    }
-    return config;
-  },
-  error => Promise.reject(error)
-);
-
-apiClient.interceptors.response.use(
-  response => {
-    // Force connection cleanup after response
-    return response;
-  },
-  error => {
-    // Force connection cleanup on error
-    return Promise.reject(error);
-  }
-);
-
 export async function searchTracks(query: string, offset = 0, limit = 20): Promise<SearchResponse> {
-  const params = new URLSearchParams({
-    q: query,
-    offset: offset.toString(),
-    type: 'track',
-  });
-  const response: AxiosResponse<SearchResponse> = await apiClient.get(`/search?${params}`);
-  return response.data;
+  console.warn('searchTracks is being called from renderer, but should be called via electronAPI.');
+  // Возвращаем пустой результат, чтобы избежать падения приложения.
+  return { tracks: [], total: 0 };
 }
 
 export async function getStreamUrl(trackId: string): Promise<string> {
-  const response: AxiosResponse<{ url: string }> = await apiClient.get(`/stream?trackId=${trackId}`);
-  if (!response.data.url) throw new Error('No stream URL received');
-  return response.data.url;
+  console.warn('getStreamUrl is being called from renderer, but should be called via electronAPI.');
+  // Возвращаем пустую строку.
+  return '';
 }
 
-// Helper function to convert API track to context Track
 export function convertAPITrackToTrack(apiTrack: APITrack): Track {
-  // Extract image URL from the images object
   let coverUrl = '';
   if (apiTrack.images) {
-    // Use large image if available, fallback to small, then thumbnail
     coverUrl = apiTrack.images.large || apiTrack.images.small || apiTrack.images.thumbnail || '';
   } else if (apiTrack.albumCover) {
-    // Fallback to albumCover if images object is not available
     coverUrl = apiTrack.albumCover;
   }
-  
+
   return {
-    id: apiTrack.id.toString(), // Convert number to string
+    id: apiTrack.id.toString(),
     title: apiTrack.title,
     artist: apiTrack.artist,
     album: apiTrack.albumTitle || 'Unknown Album',
     duration: apiTrack.duration,
     coverUrl: coverUrl,
-    audioUrl: '', // We'll get this from getStreamUrl when needed
-    liked: false // Default to false, will be updated by context
+    audioUrl: '',
+    liked: false
   };
-} 
+}

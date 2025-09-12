@@ -1,5 +1,8 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
+// src/App.tsx
+
+import React from 'react';
+// 1. Заменяем BrowserRouter на HashRouter
+import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { CssBaseline, Box } from '@mui/material';
 import './App.css';
@@ -12,61 +15,8 @@ import RecentlyPlayed from './pages/RecentlyPlayed';
 import About from './pages/About';
 import { MusicProvider } from './contexts/MusicContext';
 
-// Component to handle default route redirection
-const DefaultRouteHandler: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  useEffect(() => {
-    console.log('DefaultRouteHandler: Current pathname:', location.pathname);
-    console.log('DefaultRouteHandler: Running on platform:', navigator.platform);
-    
-    if (location.pathname === '/') {
-      console.log('DefaultRouteHandler: Redirecting from / to /home');
-      try {
-        navigate('/home', { replace: true });
-        console.log('DefaultRouteHandler: Redirect successful');
-      } catch (error) {
-        console.error('DefaultRouteHandler: Redirect failed:', error);
-        // Fallback: try to force navigation
-        window.location.href = '/home';
-      }
-    } else {
-      console.log('DefaultRouteHandler: No redirect needed, current path:', location.pathname);
-    }
-  }, [navigate, location.pathname]);
-
-  // Also handle the case where we're at root but the redirect didn't work
-  useEffect(() => {
-    if (location.pathname === '/') {
-      console.log('DefaultRouteHandler: Still at root, forcing redirect...');
-      const timer = setTimeout(() => {
-        if (location.pathname === '/') {
-          console.log('DefaultRouteHandler: Force redirect after timeout');
-          navigate('/home', { replace: true });
-        }
-      }, 100);
-      
-      return () => clearTimeout(timer);
-    }
-  }, [location.pathname, navigate]);
-
-  // Force redirect if we're still at root after a longer delay (for Electron builds)
-  useEffect(() => {
-    if (location.pathname === '/') {
-      const forceTimer = setTimeout(() => {
-        if (location.pathname === '/') {
-          console.log('DefaultRouteHandler: Force redirect after long timeout (Electron fallback)');
-          navigate('/home', { replace: true });
-        }
-      }, 500);
-      
-      return () => clearTimeout(forceTimer);
-    }
-  }, [location.pathname, navigate]);
-
-  return null;
-};
+// 2. Полностью удаляем ненадежный компонент DefaultRouteHandler
+// const DefaultRouteHandler: React.FC = () => { ... };
 
 const darkTheme = createTheme({
   palette: {
@@ -119,30 +69,27 @@ const darkTheme = createTheme({
 });
 
 const App: React.FC = () => {
-  // Detect if we're running in Electron
-  const isElectron = typeof window !== 'undefined' && window.process ;
-  console.log('App: Running in Electron:', isElectron);
-  console.log('App: Current location:', window.location.href);
-  
+  // 3. Убираем лишние проверки и логи
+
   return (
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
       <MusicProvider>
-        <Router basename={isElectron ? undefined : '/'}>
+        {/* 4. Используем HashRouter. Он универсален и не требует `basename` */}
+        <Router>
           <Box sx={{ display: 'flex', height: '100vh', flexDirection: 'column' }}>
             <Layout>
-              <DefaultRouteHandler />
               <Routes>
-                <Route path="/" element={<Home />} />
+                {/* 5. Добавляем чистое перенаправление с корневого пути */}
+                <Route path="/" element={<Navigate to="/home" replace />} />
                 <Route path="/home" element={<Home />} />
                 <Route path="/search" element={<Search />} />
                 <Route path="/liked" element={<LikedSongs />} />
                 <Route path="/recent" element={<RecentlyPlayed />} />
                 <Route path="/about" element={<About />} />
-                <Route path="*" element={<Home />} />
+                {/* 6. "*" для обработки любых несуществующих путей */}
+                <Route path="*" element={<Navigate to="/home" replace />} />
               </Routes>
-              {/* Fallback: Always render Home component if routing fails */}
-              {window.location.pathname === '/' && <Home />}
             </Layout>
           </Box>
         </Router>
@@ -151,4 +98,4 @@ const App: React.FC = () => {
   );
 };
 
-export default App; 
+export default App;

@@ -29,5 +29,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   closeWindow: () => ipcRenderer.invoke('close-window'),
   
   // Remove listeners
-  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel)
+  removeAllListeners: (channel) => ipcRenderer.removeAllListeners(channel),
+
+  searchTracks: (query) => ipcRenderer.invoke('search-tracks', query),
+  getStreamUrl: (trackId) => ipcRenderer.invoke('get-stream-url', trackId),
 }); 

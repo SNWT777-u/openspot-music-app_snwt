@@ -28,6 +28,9 @@ declare global {
       
       // Remove listeners
       removeAllListeners: (channel: string) => void;
+
+      searchTracks: (query: string) => Promise<{ success: boolean; data?: SearchResponse; error?: string }>;
+      getStreamUrl: (trackId: string) => Promise<{ success: boolean; data?: string; error?: string }>;
     };
   }
 }

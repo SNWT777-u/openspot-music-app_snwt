@@ -17,6 +17,9 @@ import {
   Favorite,
   FavoriteBorder,
   OpenInFull as OpenInFullIcon,
+  Shuffle as ShuffleIcon,
+  Repeat as RepeatIcon,
+  RepeatOne as RepeatOneIcon,
 } from '@mui/icons-material';
 import { useMusic } from '../contexts/MusicContext';
 import { SxProps } from '@mui/system';
@@ -30,6 +33,17 @@ const Player: React.FC<PlayerProps> = ({ sx, disableOpenFullScreen }) => {
   const { state, dispatch } = useMusic();
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
+
+  const handleToggleShuffle = () => {
+    dispatch({ type: 'TOGGLE_SHUFFLE' });
+  };
+
+  const handleCycleRepeatMode = () => {
+    const modes = ['off', 'playlist', 'track'] as const;
+    const currentIndex = modes.indexOf(state.repeatMode);
+    const nextIndex = (currentIndex + 1) % modes.length;
+    dispatch({ type: 'SET_REPEAT_MODE', payload: modes[nextIndex] });
+  };
 
   // Sync seekValue with state.currentTime unless user is seeking
   useEffect(() => {
@@ -167,6 +181,11 @@ const Player: React.FC<PlayerProps> = ({ sx, disableOpenFullScreen }) => {
         </IconButton>
       </Box>
 
+      {/* 3. Добавляем кнопку Shuffle */}
+      <IconButton size="small" onClick={handleToggleShuffle} sx={{ color: state.isShuffled ? 'primary.main' : '#ffffff' }}>
+            <ShuffleIcon />
+          </IconButton>
+
       {/* Player Controls */}
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ marginBottom: '8px' }}>
@@ -187,6 +206,10 @@ const Player: React.FC<PlayerProps> = ({ sx, disableOpenFullScreen }) => {
           </IconButton>
           <IconButton size="small" onClick={handleNextTrack} sx={{ color: '#ffffff' }}>
             <SkipNext />
+          </IconButton>
+
+        <IconButton size="small" onClick={handleCycleRepeatMode} sx={{ color: state.repeatMode !== 'off' ? 'primary.main' : '#ffffff' }}>
+            {state.repeatMode === 'track' ? <RepeatOneIcon /> : <RepeatIcon />}
           </IconButton>
         </Stack>
 

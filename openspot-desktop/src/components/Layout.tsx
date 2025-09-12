@@ -5,6 +5,7 @@ import { Home, Search, Favorite, QueueMusic, Info } from '@mui/icons-material';
 import Player from './Player';
 import AudioController from './AudioController';
 import { useMusic } from '../contexts/MusicContext';
+import TopBar from './TopBar';
 
 // Lazy load FullScreenPlayer
 const FullScreenPlayer = React.lazy(() => import('./FullScreenPlayer'));
@@ -50,20 +51,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   return (
     <Box sx={{ display: 'flex', height: '100vh' }}>
-      {/* Draggable Top Bar */}
-      <Box
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: 32,
-          zIndex: 2000,
-          WebkitAppRegion: 'drag',
-          background: 'rgba(0,0,0,0.01)',
-          userSelect: 'none',
-        }}
-      />
 
       {/* Sidebar */}
       <Drawer
@@ -157,13 +144,15 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           position: 'relative',
         }}
       >
+        <TopBar />
         <AudioController />
         <Box
           sx={{
             flexGrow: 1,
             overflow: 'auto',
             backgroundColor: '#121212',
-            marginBottom: '90px',
+            marginBottom: '90px', // Место для плеера
+            paddingTop: '56px', // 4. Добавляем отступ для TopBar
           }}
         >
           {children}

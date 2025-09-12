@@ -9,9 +9,11 @@ import {
   IconButton,
   Button,
 } from '@mui/material';
-import { PlayArrow, Favorite, MoreVert, QueueMusic, Pause, FavoriteBorder, Search } from '@mui/icons-material';
+import { PlayArrow, Favorite, MoreVert, QueueMusic, Pause, FavoriteBorder, Search, History } from '@mui/icons-material';
 import { useMusic, Track } from '../contexts/MusicContext';
-import { convertAPITrackToTrack, APITrack } from '../lib/music-api';
+import { apiService } from '../lib/apiService';
+import { Link } from 'react-router-dom';
+import {APITrack, convertAPITrackToTrack} from '../lib/music-api';
 
 // Constants for trending
 const TRENDING_URL = 'https://raw.githubusercontent.com/BlackHatDevX/trending-music-os/refs/heads/main/trending.json';
@@ -29,11 +31,11 @@ const Home: React.FC = () => {
   const recentRef = useRef<HTMLDivElement>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null);
-  
+
   // Debug logging
   console.log('Home component rendered at:', new Date().toISOString());
   console.log('Home component pathname:', window.location.pathname);
-  
+
   // Trending songs state
   const [trendingTracks, setTrendingTracks] = useState<Track[]>([]);
   const [country, setCountry] = useState('your country');
@@ -55,12 +57,12 @@ const Home: React.FC = () => {
       }
     `;
     document.head.appendChild(style);
-    
+
     return () => {
       document.head.removeChild(style);
     };
   }, []);
-  
+
   // Dynamic greeting based on time
 const getGreeting = () => {
   const hour = new Date().getHours();
@@ -119,12 +121,12 @@ var greeting = getGreeting();
       try {
         // Try multiple sources for locale information
         let countryCode = 'US'; // Default fallback
-        
+
         // Method 1: Try to infer from timezone (most reliable for location)
         try {
           const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
           console.log('System timezone:', timezone);
-          
+
           // Map common timezones to countries
           const timezoneToCountry: Record<string, string> = {
             'America/New_York': 'US',
@@ -232,7 +234,7 @@ var greeting = getGreeting();
             'Africa/Cotonou': 'BJ',
             'Africa/Porto-Novo': 'BJ'
           };
-          
+
           if (timezoneToCountry[timezone]) {
             countryCode = timezoneToCountry[timezone];
             console.log('Using timezone-based detection:', timezone, '->', countryCode);
@@ -240,13 +242,13 @@ var greeting = getGreeting();
         } catch (e) {
           console.log('Timezone detection failed:', e);
         }
-        
+
         // Method 2: Try to get from system date formatting
         if (countryCode === 'US') {
           try {
             const dateFormatter = new Intl.DateTimeFormat();
             const options = dateFormatter.resolvedOptions();
-            
+
             // Check if we can infer country from date formatting preferences
             if (options.locale && options.locale.includes('-')) {
               const localeCountry = options.locale.split('-')[1];
@@ -259,13 +261,13 @@ var greeting = getGreeting();
             console.log('Date formatting detection failed:', e);
           }
         }
-        
+
         // Method 3: Try to get from system number formatting
         if (countryCode === 'US') {
           try {
             const numberFormatter = new Intl.NumberFormat();
             const options = numberFormatter.resolvedOptions();
-            
+
             // Check if we can infer country from number formatting preferences
             if (options.locale && options.locale.includes('-')) {
               const localeCountry = options.locale.split('-')[1];
@@ -278,13 +280,13 @@ var greeting = getGreeting();
             console.log('Number formatting detection failed:', e);
           }
         }
-        
+
         // Method 4: Try to get from system currency formatting
         if (countryCode === 'US') {
           try {
             const currencyFormatter = new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' });
             const options = currencyFormatter.resolvedOptions();
-            
+
             // Check if we can infer country from currency formatting preferences
             if (options.locale && options.locale.includes('-')) {
               const localeCountry = options.locale.split('-')[1];
@@ -297,13 +299,13 @@ var greeting = getGreeting();
             console.log('Currency formatting detection failed:', e);
           }
         }
-        
+
         // Method 5: Try to get from system collation (sorting) preferences
         if (countryCode === 'US') {
           try {
             const collator = new Intl.Collator();
             const options = collator.resolvedOptions();
-            
+
             // Check if we can infer country from collation preferences
             if (options.locale && options.locale.includes('-')) {
               const localeCountry = options.locale.split('-')[1];
@@ -316,7 +318,7 @@ var greeting = getGreeting();
             console.log('Collation detection failed:', e);
           }
         }
-        
+
         // Method 6: Primary language (fallback, less reliable for location)
         if (countryCode === 'US' && navigator.language) {
           const primaryLocale = navigator.language;
@@ -326,7 +328,7 @@ var greeting = getGreeting();
             console.log('Using primary locale (fallback):', primaryLocale, '->', primaryCountry);
           }
         }
-        
+
         // Method 7: First available language from languages array (last resort)
         if (countryCode === 'US' && navigator.languages && navigator.languages.length > 0) {
           for (const lang of navigator.languages) {
@@ -338,7 +340,7 @@ var greeting = getGreeting();
             }
           }
         }
-        
+
         // Method 8: Check if we're in Electron and try to get system locale
         if (countryCode === 'US') {
           // Simplified Electron detection - just log that we're in Electron
@@ -350,7 +352,7 @@ var greeting = getGreeting();
             console.log('Not in Electron environment');
           }
         }
-        
+
         console.log('Final country code:', countryCode);
         setCountry(COUNTRY_NAMES[countryCode] || 'United States');
         setCountryError(null);
@@ -362,7 +364,7 @@ var greeting = getGreeting();
         setCountryLoading(false);
       }
     };
-    
+
     // Get country immediately without network request
     getCountryFromSystem();
   }, []);
@@ -371,93 +373,67 @@ var greeting = getGreeting();
   useEffect(() => {
     let isMounted = true;
     const fetchTrendingTracks = async (list: string[]) => {
-      // Load cache from state
       let cache = { ...trendingCache };
       const tracks: Track[] = [];
       let cacheChanged = false;
-      
-      // First, add all cached tracks immediately
+
+      // Сначала отображаем треки из кеша
       for (const entry of list) {
         if (cache[entry]) {
-          const cachedTrack: Track = {
-            ...cache[entry],
-            liked: state.likedTracks.some(t => t.id === cache[entry].id)
-          };
+          const cachedTrack: Track = { ...cache[entry], liked: state.likedTracks.some(t => t.id === cache[entry].id) };
           tracks.push(cachedTrack);
         }
       }
-      
-      // Display cached tracks immediately
-      if (isMounted) {
-        setTrendingTracks([...tracks]);
-      }
-      
-      // Then fetch missing tracks one by one and add them progressively
+      if (isMounted) setTrendingTracks([...tracks]);
+
+      // Затем подгружаем недостающие
       for (const entry of list) {
         if (!cache[entry]) {
           try {
             console.log(`[Trending] Searching for: ${entry}`);
-            // Import the search function dynamically to avoid circular dependencies
-            const { searchTracks } = await import('../lib/music-api');
-            const res = await searchTracks(entry);
+
+            // ИСПОЛЬЗУЕМ ELECTRON API
+            const result = await apiService.searchTracks(entry);
+
+
+            const res = await apiService.searchTracks(entry);
             if (res.tracks && res.tracks.length > 0) {
-              // Convert API track to context Track type using the helper function
               const apiTrack = res.tracks[0] as APITrack;
               const contextTrack = convertAPITrackToTrack(apiTrack);
-              
-              // Check if this track is already liked
               contextTrack.liked = state.likedTracks.some(t => t.id === contextTrack.id);
-              
-              // Create a cache version without the liked property (it's dynamic)
+
               const { liked, ...cacheTrack } = contextTrack;
-              
               cache[entry] = cacheTrack;
               tracks.push(contextTrack);
               cacheChanged = true;
-              
-              // Update state immediately when a new track is found
-              if (isMounted) {
-                setTrendingTracks([...tracks]);
-              }
+
+              if (isMounted) setTrendingTracks([...tracks]);
             } else {
               console.warn(`[Trending] No results for: ${entry}`);
             }
-          } catch (e) {
+          } catch (e: any) {
             console.error(`[Trending] Error fetching "${entry}":`, e);
-            setTrendingError(`Failed to load trending tracks: ${e instanceof Error ? e.message : 'Network error'}`);
+            if (isMounted) setTrendingError(`Failed to load some trending tracks: ${e.message}`);
           }
         }
       }
-      
+
       if (cacheChanged) {
         setTrendingCache(cache);
-        try {
-          localStorage.setItem(TRENDING_TRACKS_CACHE_KEY, JSON.stringify(cache));
-        } catch (e) {
-          console.error('Failed to save trending tracks cache:', e);
-        }
+        try { localStorage.setItem(TRENDING_TRACKS_CACHE_KEY, JSON.stringify(cache)); }
+        catch (e) { console.error('Failed to save cache:', e); }
       }
     };
-    
-    if (!countryLoading && !trendingDataLoading && trendingData && country && country !== 'your country') {
-      // Use lowercased country key for lookup
+
+    if (!countryLoading && !trendingDataLoading && trendingData && country) {
       const countryKey = country.toLowerCase();
-      const trendingKey = Object.keys(trendingData).find(
-        k => k.toLowerCase() === countryKey
-      );
-      if (trendingKey && trendingData[trendingKey]) {
-        fetchTrendingTracks(trendingData[trendingKey]);
-      } else if (trendingData.global) {
-        fetchTrendingTracks(trendingData.global);
-      } else {
-        setTrendingTracks([]);
-      }
-    } else {
-      setTrendingTracks([]);
+      const trendingKey = Object.keys(trendingData).find(k => k.toLowerCase() === countryKey);
+      const list = trendingKey ? trendingData[trendingKey] : trendingData.global;
+      if (list) fetchTrendingTracks(list);
     }
-    
+
     return () => { isMounted = false; };
-  }, [country, countryLoading, trendingData, trendingDataLoading, trendingCache]);
+  }, [country, countryLoading, trendingData, trendingDataLoading, trendingCache, state.likedTracks]);
 
   // Mix liked and recently played, remove duplicates, shuffle, pick 20
   const mixedTracks = useMemo(() => {
@@ -469,14 +445,14 @@ var greeting = getGreeting();
       }
     });
     let mixed = Array.from(uniqueTracksMap.values());
-    
+
     console.log('Mixed tracks calculation:', {
       totalTracks: allTracks.length,
       uniqueTracks: mixed.length,
       isInitialized,
       willShuffle: mixed.length > 0 && !isInitialized
     });
-    
+
     // Always shuffle if we have tracks, regardless of initialization state
     if (mixed.length > 0) {
     for (let i = mixed.length - 1; i > 0; i--) {
@@ -484,7 +460,7 @@ var greeting = getGreeting();
       [mixed[i], mixed[j]] = [mixed[j], mixed[i]];
     }
     }
-    
+
     return mixed.slice(0, 20);
   }, [state.likedTracks.length, state.recentlyPlayed.length, isInitialized]);
 
@@ -495,13 +471,13 @@ var greeting = getGreeting();
         setGeneralError(null); // Clear previous errors
         // Set the queue first
       dispatch({ type: 'SET_QUEUE', payload: mixedTracks });
-        
+
         // Set the first track as current
       dispatch({ type: 'SET_CURRENT_TRACK', payload: mixedTracks[0] });
-        
+
         // Add to recently played
       dispatch({ type: 'ADD_TO_RECENTLY_PLAYED', payload: mixedTracks[0] });
-        
+
         // Ensure playing state is set
         if (!state.isPlaying) {
           dispatch({ type: 'TOGGLE_PLAY_PAUSE' });
@@ -516,20 +492,20 @@ var greeting = getGreeting();
   const handlePlayPauseTrack = async (track: Track) => {
     try {
       setGeneralError(null); // Clear previous errors
-      
+
     if (state.currentTrack?.id === track.id) {
         // Same track - just toggle play/pause
       dispatch({ type: 'TOGGLE_PLAY_PAUSE' });
     } else {
         // New track - set it as current and start playing immediately
         setLoadingTrackId(track.id);
-        
+
         try {
           // Set the track first
       dispatch({ type: 'SET_CURRENT_TRACK', payload: track });
       dispatch({ type: 'SET_QUEUE', payload: mixedTracks });
       dispatch({ type: 'ADD_TO_RECENTLY_PLAYED', payload: track });
-          
+
           // Ensure playing state is set to true for new tracks
           if (!state.isPlaying) {
             dispatch({ type: 'TOGGLE_PLAY_PAUSE' });
@@ -590,8 +566,8 @@ var greeting = getGreeting();
             sx={{
               backgroundColor: mixedTracks.length === 0 ? '#535353' : '#1db954',
               color: '#ffffff',
-              '&:hover': { 
-                backgroundColor: mixedTracks.length === 0 ? '#535353' : '#1ed760' 
+              '&:hover': {
+                backgroundColor: mixedTracks.length === 0 ? '#535353' : '#1ed760'
               },
               '&:disabled': {
                 backgroundColor: '#535353',
@@ -608,7 +584,44 @@ var greeting = getGreeting();
           </Button>
         </Box>
       </Box>
-      
+
+      {/* [НОВОЕ] Секция карточек быстрого доступа */}
+      <Grid container spacing={2} sx={{ mb: 6 }}>
+        {state.likedTracks.length > 0 && (
+          <Grid item xs={12} sm={6} md={4}>
+            <Link to="/liked" style={{ textDecoration: 'none' }}>
+              <Card sx={{ display: 'flex', alignItems: 'center', backgroundColor: '#2a2a2a', height: 80, transition: 'transform 0.2s ease-in-out', '&:hover': { transform: 'scale(1.03)', backgroundColor: '#3a3a3a' } }}>
+                <Box sx={{ width: 80, height: 80, background: 'linear-gradient(135deg, #450af5, #c93aed)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Favorite sx={{ fontSize: 40, color: '#fff' }} />
+                </Box>
+                <CardContent>
+                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 600 }}>
+                    Liked Songs
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Link>
+          </Grid>
+
+        )}
+        {state.recentlyPlayed.length > 0 && (
+          <Grid item xs={12} sm={6} md={4}>
+            <Link to="/recent" style={{ textDecoration: 'none' }}>
+              <Card sx={{ display: 'flex', alignItems: 'center', backgroundColor: '#2a2a2a', height: 80, transition: 'transform 0.2s ease-in-out', '&:hover': { transform: 'scale(1.03)', backgroundColor: '#3a3a3a' } }}>
+                <Box sx={{ width: 80, height: 80, background: 'linear-gradient(135deg, #1db954, #121212)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <History sx={{ fontSize: 40, color: '#fff' }} />
+                </Box>
+                <CardContent>
+                  <Typography variant="h6" sx={{ color: '#fff', fontWeight: 600 }}>
+                    Recently Played
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Link>
+          </Grid>
+        )}
+      </Grid>
+
       {/* General Error Display */}
       {generalError && (
         <Box sx={{ marginBottom: '24px', padding: '16px', backgroundColor: 'rgba(255, 107, 107, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 107, 107, 0.3)' }}>
@@ -623,7 +636,7 @@ var greeting = getGreeting();
             sx={{
               borderColor: '#ff6b6b',
               color: '#ff6b6b',
-              '&:hover': { 
+              '&:hover': {
                 borderColor: '#ff5252',
                 backgroundColor: 'rgba(255, 107, 107, 0.08)'
               }
@@ -633,7 +646,7 @@ var greeting = getGreeting();
           </Button>
         </Box>
       )}
-      
+
       {/* Trending Songs Section */}
       <Box sx={{ marginBottom: '48px' }}>
         <Typography
@@ -646,8 +659,8 @@ var greeting = getGreeting();
         >
           Trending in {countryLoading ? '...' : (country || 'your country')}
         </Typography>
-    
-        
+
+
         {countryError && (
           <Box sx={{ marginBottom: '16px', padding: '12px', backgroundColor: 'rgba(255, 107, 107, 0.1)', borderRadius: '8px', border: '1px solid rgba(255, 107, 107, 0.3)' }}>
             <Typography variant="body2" sx={{ color: '#ff6b6b', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -656,7 +669,7 @@ var greeting = getGreeting();
             </Typography>
           </Box>
         )}
-        
+
         {trendingTracks.length === 0 && !trendingDataLoading && (
           <Box sx={{ textAlign: 'center', padding: '40px 20px' }}>
             {trendingError ? (
@@ -671,7 +684,7 @@ var greeting = getGreeting();
                   sx={{
                     borderColor: '#ff6b6b',
                     color: '#ff6b6b',
-                    '&:hover': { 
+                    '&:hover': {
                       borderColor: '#ff5252',
                       backgroundColor: 'rgba(255, 107, 107, 0.08)'
                     }
@@ -687,14 +700,14 @@ var greeting = getGreeting();
             )}
           </Box>
         )}
-        
+
         {trendingTracks.length > 0 && (
-          <Box sx={{ 
-            display: 'flex', 
-            overflowX: 'auto', 
+          <Box sx={{
+            display: 'flex',
+            overflowX: 'auto',
             overflowY: 'hidden',
-            gap: '16px', 
-            paddingBottom: '16px', 
+            gap: '16px',
+            paddingBottom: '16px',
             '&::-webkit-scrollbar': { display: 'none' },
             height: 'fit-content'
           }}>
@@ -717,9 +730,9 @@ var greeting = getGreeting();
                 <Box sx={{ position: 'relative' }}>
                   <CardMedia
                     component="img"
-                    sx={{ 
-                      width: '100%', 
-                      height: 200, 
+                    sx={{
+                      width: '100%',
+                      height: 200,
                       objectFit: 'cover',
                       borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
                     }}
@@ -731,11 +744,11 @@ var greeting = getGreeting();
                     size="large"
                     onClick={() => handlePlayPauseTrack(track)}
                     disabled={loadingTrackId === track.id}
-                    sx={{ 
+                    sx={{
                       position: 'absolute',
                       bottom: '12px',
                       right: '12px',
-                      background: state.currentTrack?.id === track.id && state.isPlaying ? '#1db954' : 'rgba(29, 185, 84, 0.9)', 
+                      background: state.currentTrack?.id === track.id && state.isPlaying ? '#1db954' : 'rgba(29, 185, 84, 0.9)',
                       color: '#fff',
                       width: 48,
                       height: 48,
@@ -753,13 +766,13 @@ var greeting = getGreeting();
                     }}
                   >
                     {loadingTrackId === track.id ? (
-                      <Box sx={{ 
-                        width: 24, 
-                        height: 24, 
-                        border: '2px solid #fff', 
-                        borderTop: '2px solid transparent', 
-                        borderRadius: '50%', 
-                        animation: 'spin 1s linear infinite' 
+                      <Box sx={{
+                        width: 24,
+                        height: 24,
+                        border: '2px solid #fff',
+                        borderTop: '2px solid transparent',
+                        borderRadius: '50%',
+                        animation: 'spin 1s linear infinite'
                       }} />
                     ) : state.currentTrack?.id === track.id && state.isPlaying ? (
                       <Pause sx={{ fontSize: 24 }} />
@@ -768,19 +781,19 @@ var greeting = getGreeting();
                     )}
                   </IconButton>
                 </Box>
-                <CardContent sx={{ 
-                  flexGrow: 1, 
-                  p: 2, 
-                  display: 'flex', 
-                  flexDirection: 'column', 
+                <CardContent sx={{
+                  flexGrow: 1,
+                  p: 2,
+                  display: 'flex',
+                  flexDirection: 'column',
                   justifyContent: 'space-between'
                 }}>
                   <Box>
-                    <Typography 
-                      variant="h6" 
-                      sx={{ 
-                        color: '#fff', 
-                        fontWeight: 500, 
+                    <Typography
+                      variant="h6"
+                      sx={{
+                        color: '#fff',
+                        fontWeight: 500,
                         marginBottom: '8px',
                         fontSize: '14px',
                         lineHeight: '1.2',
@@ -790,15 +803,15 @@ var greeting = getGreeting();
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
                         textOverflow: 'ellipsis'
-                      }} 
+                      }}
                       noWrap
                     >
                       {track.title}
                     </Typography>
-                    <Typography 
-                      variant="body2" 
-                      sx={{ 
-                        color: '#b3b3b3', 
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        color: '#b3b3b3',
                         marginBottom: '16px',
                         fontSize: '12px',
                         lineHeight: '1.2',
@@ -808,7 +821,7 @@ var greeting = getGreeting();
                         WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
                         textOverflow: 'ellipsis'
-                      }} 
+                      }}
                       noWrap
                     >
                       {track.artist} • {track.album}
@@ -820,37 +833,30 @@ var greeting = getGreeting();
           </Box>
         )}
       </Box>
-      
-      {/* Mixed Songs Grid */}
+      {/* [НОВОЕ] Заголовок для персонального микса */}
+      {mixedTracks.length > 0 && (
+        <Typography variant="h5" sx={{ color: '#ffffff', fontWeight: 600, mb: '24px' }}>
+          Made for You
+        </Typography>
+      )}
+
+      {/* Сетка с персональным миксом */}
       <Box>
         <Grid container spacing={2}>
           {mixedTracks.length === 0 && (
             <Grid item xs={12}>
               <Box sx={{ textAlign: 'center', padding: '40px 20px' }}>
-                <Typography variant="h6" sx={{ color: '#b3b3b3', marginBottom: '16px' }}>
+                <Typography variant="h6" sx={{ color: '#b3b3b3', mb: '16px' }}>
                   Welcome to OpenSpot Music!
                 </Typography>
-                <Typography variant="body1" sx={{ color: '#666', marginBottom: '24px' }}>
+                <Typography variant="body1" sx={{ color: '#666', mb: '24px' }}>
                   Start by searching for your favorite songs to build your music library.
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<Search />}
-                  onClick={() => window.location.href = '/search'}
-                  sx={{
-                    borderColor: '#1db954',
-                    color: '#1db954',
-                    '&:hover': { 
-                      borderColor: '#1ed760',
-                      backgroundColor: 'rgba(29, 185, 84, 0.08)'
-                    },
-                    borderRadius: '20px',
-                    textTransform: 'none',
-                    fontWeight: 500,
-                  }}
-                >
-                  Search for Songs
-                </Button>
+                <Link to="/search">
+                  <Button variant="outlined" startIcon={<Search />} sx={{ borderColor: '#1db954', color: '#1db954', '&:hover': { borderColor: '#1ed760', backgroundColor: 'rgba(29, 185, 84, 0.08)' }, borderRadius: '20px', textTransform: 'none' }}>
+                    Search for Songs
+                  </Button>
+                </Link>
               </Box>
             </Grid>
           )}
@@ -879,9 +885,9 @@ var greeting = getGreeting();
                   size="medium"
                   onClick={() => handlePlayPauseTrack(track)}
                   disabled={loadingTrackId === track.id}
-                  sx={{ 
-                    background: state.currentTrack?.id === track.id && state.isPlaying ? '#1db954' : '#232323', 
-                    color: '#fff', 
+                  sx={{
+                    background: state.currentTrack?.id === track.id && state.isPlaying ? '#1db954' : '#232323',
+                    color: '#fff',
                     ml: 2,
                     '&:disabled': {
                       opacity: 0.6,
@@ -890,13 +896,13 @@ var greeting = getGreeting();
                   }}
                 >
                   {loadingTrackId === track.id ? (
-                    <Box sx={{ 
-                      width: 20, 
-                      height: 20, 
-                      border: '2px solid #fff', 
-                      borderTop: '2px solid transparent', 
-                      borderRadius: '50%', 
-                      animation: 'spin 1s linear infinite' 
+                    <Box sx={{
+                      width: 20,
+                      height: 20,
+                      border: '2px solid #fff',
+                      borderTop: '2px solid transparent',
+                      borderRadius: '50%',
+                      animation: 'spin 1s linear infinite'
                     }} />
                   ) : state.currentTrack?.id === track.id && state.isPlaying ? (
                     <Pause />
@@ -913,4 +919,4 @@ var greeting = getGreeting();
   );
 };
 
-export default Home; 
+export default Home;
