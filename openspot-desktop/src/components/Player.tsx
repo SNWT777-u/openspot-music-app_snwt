@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
-  IconButton,
-  Typography,
-  Slider,
-  Stack,
-  CardMedia,
+    Box,
+    IconButton,
+    Typography,
+    Slider,
+    Stack,
+    CardMedia, Fade,
 } from '@mui/material';
 import {
   PlayArrow,
@@ -20,6 +20,7 @@ import {
   Shuffle as ShuffleIcon,
   Repeat as RepeatIcon,
   RepeatOne as RepeatOneIcon,
+  Download as DownloadIcon
 } from '@mui/icons-material';
 import { useMusic } from '../contexts/MusicContext';
 import { SxProps } from '@mui/system';
@@ -27,9 +28,11 @@ import { SxProps } from '@mui/system';
 interface PlayerProps {
   sx?: SxProps;
   disableOpenFullScreen?: boolean;
+  showDownloadIcon?: boolean;
+  onDownloadClick?: () => void;
 }
 
-const Player: React.FC<PlayerProps> = ({ sx, disableOpenFullScreen }) => {
+const Player: React.FC<PlayerProps> = ({ sx, disableOpenFullScreen, showDownloadIcon, onDownloadClick }) => {
   const { state, dispatch } = useMusic();
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
@@ -246,6 +249,11 @@ const Player: React.FC<PlayerProps> = ({ sx, disableOpenFullScreen }) => {
 
       {/* Volume Controls */}
       <Box sx={{ display: 'flex', alignItems: 'center', minWidth: '180px', width: '30%', justifyContent: 'flex-end' }}>
+         <Fade in={showDownloadIcon}>
+          <IconButton onClick={onDownloadClick} sx={{ color: '#b3b3b3' }}>
+            <DownloadIcon />
+          </IconButton>
+        </Fade>
         <VolumeDown sx={{ color: '#b3b3b3', marginRight: '8px' }} />
         <Slider
           size="small"

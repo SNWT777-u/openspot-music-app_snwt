@@ -31,6 +31,7 @@ declare global {
 
       searchTracks: (query: string) => Promise<{ success: boolean; data?: SearchResponse; error?: string }>;
       getStreamUrl: (trackId: string) => Promise<{ success: boolean; data?: string; error?: string }>;
+      getLyrics: (artist: string, title: string) => Promise<{ success: boolean; data?: { lyrics: string }; error?: string }>;
     };
   }
 }

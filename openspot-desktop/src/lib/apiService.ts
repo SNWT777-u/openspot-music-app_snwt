@@ -32,7 +32,7 @@ export const apiService = {
     } else {
       console.log('API Service: Running in Browser, using HTTP proxy.');
       const params = new URLSearchParams({ q: query, offset: '0', limit: '20', type: 'track' });
-      const response = await browserApiClient.get(`/?${params}`);
+      const response = await browserApiClient.get(`/search?${params}`);
       return response.data;
     }
   },
@@ -51,9 +51,29 @@ export const apiService = {
         throw new Error(result.error || 'Electron API stream URL failed');
       }
     } else {
-      console.log('API Service: Running in Browser, using HTTP proxy.');
-      // Эта часть уже возвращает строку, так что здесь все было в порядке
-      return `https://dab.yeet.su/api/stream?trackId=${trackId}`;
+      // [ИСПРАВЛЕНО] Мы больше не конструируем URL вручную, а используем прокси
+      const params = new URLSearchParams({ trackId });
+      const response = await browserApiClient.get(`/stream?${params}`);
+      if (response.data && response.data.url) {
+        return response.data.url;
+      }
+      throw new Error('Stream URL not found');
+    }
+  },
+
+  getLyrics: async (artist: string, title: string): Promise<{ lyrics: string }> => {
+    const params = new URLSearchParams({ artist, title });
+    if (isElectron()) {
+      console.log('API Service: Getting lyrics via IPC.');
+      const result = await window.electronAPI.getLyrics(artist, title);
+      if (result.success && result.data) {
+        return result.data;
+      }
+      throw new Error(result.error || 'Electron API lyrics failed');
+    } else {
+      // [ИСПРАВЛЕНО] Запрос на /api/?artist=...&title=...
+      const response = await browserApiClient.get(`/lyrics?${params}`);
+      return response.data;
     }
   },
 };

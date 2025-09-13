@@ -19,6 +19,7 @@ import { useMusic } from '../contexts/MusicContext';
 import { apiService } from '../lib/apiService';
 import type { Track, APITrack } from '../lib/music-api';
 import { convertAPITrackToTrack } from '../lib/music-api';
+import TrackMenu from '../components/TrackMenu';
 
 // Расширенный список жанров для более полного вида
 const GENRE_CATEGORIES = [
@@ -157,6 +158,7 @@ const Search: React.FC = () => {
                   <CardContent sx={{ flexGrow: 1, p: 2 }}>
                     <Typography noWrap sx={{ color: '#fff', fontWeight: 600, fontSize: '1rem' }}>{track.title}</Typography>
                     <Typography noWrap variant="body2" sx={{ color: '#b3b3b3' }}>{track.artist}</Typography>
+                     <TrackMenu track={track} />
                   </CardContent>
                 </Card>
               </Grid>

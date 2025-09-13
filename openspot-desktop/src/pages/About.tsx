@@ -1,16 +1,18 @@
+// src/pages/About.tsx
+
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, CardMedia, Stack, Alert, CircularProgress } from '@mui/material';
 import { GitHub, Update, CheckCircle } from '@mui/icons-material';
 
-
-const RELEASES_URL = 'https://github.com/BlackHatDevX/openspot-music-app/releases';
-const GITHUB_REPO_URL = 'https://github.com/BlackHatDevX/openspot-music-app';
+// [ПЕРСОНАЛИЗАЦИЯ] Ссылки теперь указывают на ваш форк
+const RELEASES_URL = 'https://github.com/ruslan/openspot-music-app_snwt/releases';
+const GITHUB_REPO_URL = 'https://github.com/ruslan/openspot-music-app_snwt';
 
 const About: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string | null>(null);
   const [latestVersion, setLatestVersion] = useState<string | null>(null);
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(true);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -19,12 +21,20 @@ const About: React.FC = () => {
         setCheckingUpdate(true);
         setUpdateError(null);
 
-        // 3. Получаем текущую версию приложения через Electron API
         const currentVersion = await window.electronAPI.getAppVersion();
         setAppVersion(currentVersion);
 
-        // Получаем последнюю версию с GitHub
-        const response = await fetch('https://api.github.com/repos/BlackHatDevX/openspot-music-app/releases/latest');
+        // [ПЕРСОНАЛИЗАЦИЯ] API-запрос к вашему форку
+        const response = await fetch('https://api.github.com/repos/ruslan/openspot-music-app_snwt/releases/latest');
+
+        if (response.status === 404) {
+          // Обработка случая, когда релизов в форке еще нет
+          setLatestVersion(currentVersion);
+          setUpdateAvailable(false);
+          console.log('No releases found on the fork. Assuming current version is the latest.');
+          return;
+        }
+
         if (!response.ok) {
           throw new Error(`GitHub API Error: HTTP ${response.status}`);
         }
@@ -34,7 +44,7 @@ const About: React.FC = () => {
           const remoteVersion = data.tag_name;
           setLatestVersion(remoteVersion);
 
-          // 4. [ИСПРАВЛЕНО] Надежное сравнение версий
+          // Надежное сравнение версий
           const normalizedLocal = currentVersion.replace(/^v/, '');
           const normalizedRemote = remoteVersion.replace(/^v/, '');
 
@@ -42,13 +52,11 @@ const About: React.FC = () => {
             setUpdateAvailable(true);
           }
         } else {
-          // Если тег не найден, считаем, что мы на последней версии
           setLatestVersion(currentVersion);
         }
       } catch (error) {
         console.error('Failed to check for updates:', error);
         setUpdateError(error instanceof Error ? error.message : 'An unknown error occurred.');
-        // В случае ошибки, отображаем текущую версию как последнюю
         if (appVersion) setLatestVersion(appVersion);
       } finally {
         setCheckingUpdate(false);
@@ -56,7 +64,7 @@ const About: React.FC = () => {
     };
 
     checkForUpdates();
-  }, [appVersion]); // Перезапускаем проверку, если appVersion изменится (хотя это маловероятно)
+  }, [appVersion]);
 
   const handleUpdateClick = () => {
     window.open(RELEASES_URL, '_blank', 'noopener,noreferrer');
@@ -67,14 +75,13 @@ const About: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100vh', background: '#181818' }}>
+    <Box sx={{ p: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', minHeight: '100%', background: '#181818' }}>
       <CardMedia
         component="img"
         image="https://i.postimg.cc/LsLmXZTb/main.png"
         alt="OpenSpot Icon"
         sx={{ width: 120, height: 120, borderRadius: 4, mb: 3, boxShadow: 6 }}
       />
-
       <Typography variant="h4" sx={{ color: '#fff', fontWeight: 700, mb: 2 }}>OpenSpot</Typography>
 
       {/* Информация о версиях */}
@@ -102,7 +109,7 @@ const About: React.FC = () => {
         </Box>
 
         {updateAvailable && (
-          <Alert severity="info" sx={{ width: '100%', backgroundColor: 'rgba(29, 185, 84, 0.1)', border: '1px solid rgba(29, 185, 84, 0.3)', '& .MuiAlert-icon': { color: '#1db954' } }}>
+          <Alert severity="info" sx={{ width: '100%', backgroundColor: 'rgba(29, 185, 84, 0.1)', border: '1px solid rgba(29, 185, 84, 0.3)', '& .MuiAlert-icon': { color: '#1db954' }, '& .MuiAlert-message': { color: '#fff' } }}>
             A new version is available! Click the button below to download.
           </Alert>
         )}
@@ -115,52 +122,35 @@ const About: React.FC = () => {
 
       {/* Кнопки */}
       <Stack direction="row" spacing={2} sx={{ mb: 4 }}>
-        <Button variant="contained" color="success" startIcon={updateAvailable ? <Update /> : <CheckCircle />} onClick={handleUpdateClick} sx={{ borderRadius: 20, fontWeight: 600, backgroundColor: updateAvailable ? '#ff4444' : undefined }}>
+        <Button
+          variant="contained"
+          color="success"
+          startIcon={updateAvailable ? <Update /> : <CheckCircle />}
+          onClick={handleUpdateClick}
+          sx={{ borderRadius: 20, fontWeight: 600, backgroundColor: updateAvailable ? '#ff4444' : undefined, '&:hover': { backgroundColor: updateAvailable ? '#ff3333' : undefined } }}
+        >
           {updateAvailable ? 'Update Available' : 'Check for Updates'}
         </Button>
-        <Button variant="outlined" startIcon={<GitHub />} onClick={handleGitHubClick} sx={{ borderRadius: 20, fontWeight: 600, borderColor: '#b3b3b3', color: '#b3b3b3', '&:hover': { borderColor: '#fff', backgroundColor: 'rgba(255, 255, 255, 0.08)' } }}>
+        <Button
+          variant="outlined"
+          startIcon={<GitHub />}
+          onClick={handleGitHubClick}
+          sx={{ borderRadius: 20, fontWeight: 600, borderColor: '#b3b3b3', color: '#b3b3b3', '&:hover': { borderColor: '#fff', backgroundColor: 'rgba(255, 255, 255, 0.08)' } }}
+        >
           View on GitHub
         </Button>
       </Stack>
 
-      {/* Credits Section */}
-      <Box sx={{ 
-        width: '100%', 
-        maxWidth: 500, 
-        padding: '24px', 
-        backgroundColor: 'rgba(29, 185, 84, 0.05)', 
-        borderRadius: '16px',
-        border: '1px solid rgba(29, 185, 84, 0.2)',
-        textAlign: 'center'
-      }}>
+      {/* Секция благодарностей */}
+      <Box sx={{ width: '100%', maxWidth: 500, padding: '24px', backgroundColor: 'rgba(29, 185, 84, 0.05)', borderRadius: '16px', border: '1px solid rgba(29, 185, 84, 0.2)', textAlign: 'center' }}>
         <Typography variant="h6" sx={{ color: '#1db954', fontWeight: 600, mb: 2 }}>
-          Special Thanks
+          Credits & Thanks
         </Typography>
-        <Typography variant="body2" sx={{ color: '#b3b3b3', mb: 3, lineHeight: 1.6 }}>
-          OpenSpot wouldn't be possible without the amazing music streaming API provided by{' '}
-          <Box
-            component="span"
-            sx={{ 
-              color: '#1db954', 
-              fontWeight: 600,
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 0.5
-            }}
-          >
-            <Box
-              component="img"
-              alt="king"
-              sx={{ 
-                width: 20, 
-                height: 20, 
-                borderRadius: '4px',
-                verticalAlign: 'middle'
-              }}
-            />
-            king
-          </Box>
-          . Their service provides high-quality audio streaming and comprehensive music metadata that powers the entire OpenSpot experience.
+        <Typography variant="body2" sx={{ color: '#b3b3b3', mb: 2, lineHeight: 1.6 }}>
+          This application is a fork of the original OpenSpot project by BlackHatDevX. The experience is powered by the amazing music streaming API provided by **king**.
+        </Typography>
+        <Typography variant="caption" sx={{ color: '#666' }}>
+          Your contributions are always welcome on GitHub!
         </Typography>
       </Box>
     </Box>

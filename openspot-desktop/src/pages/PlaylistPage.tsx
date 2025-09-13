@@ -3,18 +3,47 @@
 import React from 'react';
 import { Box, Typography, Button, Table, TableBody, TableCell, TableHead, TableRow, IconButton } from '@mui/material';
 import { PlayArrow, Favorite, AccessTime, Pause, FavoriteBorder } from '@mui/icons-material';
+import { MusicNote, PlaylistPlay } from '@mui/icons-material';
 import { useMusic, Track } from '../contexts/MusicContext';
+import { useParams } from 'react-router-dom';
+import TrackMenu from '../components/TrackMenu';
 
 interface PlaylistPageProps {
-  title: string;
-  description: string;
-  tracks: Track[];
-  icon: React.ReactNode;
-  gradient: string;
+  title?: string;
+  description?: string;
+  tracks?: Track[];
+  icon?: React.ReactNode;
+  gradient?: string;
 }
 
-const PlaylistPage: React.FC<PlaylistPageProps> = ({ title, description, tracks, icon, gradient }) => {
+const PlaylistPage: React.FC<PlaylistPageProps> = (props) => {
   const { state, dispatch } = useMusic();
+  const { playlistId } = useParams<{ playlistId: string }>(); // 2. Получаем ID плейлиста из URL
+
+  // 3. Логика определения, какой плейлист отображать
+  let playlistData;
+  if (playlistId) {
+    const userPlaylist = state.playlists.find(p => p.id === playlistId);
+    if (userPlaylist) {
+      playlistData = {
+        title: userPlaylist.name,
+        description: `${userPlaylist.tracks.length} songs`,
+        tracks: userPlaylist.tracks,
+        icon: <PlaylistPlay sx={{ fontSize: 80, color: '#fff' }} />,
+        gradient: '#2a2a2a'
+      };
+    } else {
+      // Плейлист не найден
+      return <Typography>Playlist not found.</Typography>;
+    }
+  } else {
+    // Если ID нет, используем пропсы (для Liked/Recent)
+    playlistData = props;
+  }
+
+  const { title, description, tracks, icon, gradient } = playlistData;
+  if (!tracks) return null; // Если треков нет, ничего не рендерим
+
 
   const handlePlayTrack = (track: Track, index: number) => {
     if (state.currentTrack?.id === track.id) {
@@ -117,6 +146,7 @@ const PlaylistPage: React.FC<PlaylistPageProps> = ({ title, description, tracks,
                           {isLiked ? <Favorite sx={{ color: 'primary.main' }} /> : <FavoriteBorder sx={{ color: '#b3b3b3' }} />}
                        </IconButton>
                        <Typography variant="body2" sx={{ color: '#b3b3b3' }}>{formatTime(track.duration)}</Typography>
+                      <TrackMenu track={track} />
                     </Box>
                   </TableCell>
                 </TableRow>

@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const {join} = require("node:path");
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -17,7 +18,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   
   // App info
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
-  getAppIconPath: () => path.join(__dirname, '../build/icon.png'),
+  getAppIconPath: () => join(__dirname, '../build/icon.png'),
 
   // Persistence
   getStoreValue: (key) => ipcRenderer.invoke('get-store-value', key),
@@ -33,4 +34,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   searchTracks: (query) => ipcRenderer.invoke('search-tracks', query),
   getStreamUrl: (trackId) => ipcRenderer.invoke('get-stream-url', trackId),
+  getLyrics: (artist, title) => ipcRenderer.invoke('get-lyrics', artist, title),
 }); 

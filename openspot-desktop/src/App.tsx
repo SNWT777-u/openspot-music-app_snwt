@@ -14,6 +14,7 @@ import LikedSongs from './pages/LikedSongs';
 import RecentlyPlayed from './pages/RecentlyPlayed';
 import About from './pages/About';
 import { MusicProvider } from './contexts/MusicContext';
+import Settings from './pages/Settings';
 
 // 2. Полностью удаляем ненадежный компонент DefaultRouteHandler
 // const DefaultRouteHandler: React.FC = () => { ... };
@@ -87,6 +88,7 @@ const App: React.FC = () => {
                 <Route path="/liked" element={<LikedSongs />} />
                 <Route path="/recent" element={<RecentlyPlayed />} />
                 <Route path="/about" element={<About />} />
+                <Route path="/settings" element={<Settings />} />
                 {/* 6. "*" для обработки любых несуществующих путей */}
                 <Route path="*" element={<Navigate to="/home" replace />} />
               </Routes>

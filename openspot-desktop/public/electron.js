@@ -110,17 +110,15 @@ ipcMain.handle('search-tracks', async (event, query) => {
 
 ipcMain.handle('get-stream-url', async (event, trackId) => {
   try {
+    const params = new URLSearchParams({ trackId });
+    // [ИСПРАВЛЕНО] Запрос на /api/?trackId=...
     const response = await apiClient.get(`/stream?trackId=${trackId}`);
-    // Проверяем, что данные и URL существуют
     if (response.data && response.data.url) {
       return { success: true, data: response.data.url };
-    } else {
-      // Если ответ пришел, но URL в нем нет
-      throw new Error('Stream URL not found in API response.');
     }
+    throw new Error('Stream URL not found in API response.');
   } catch (error) {
     console.error('[Main Process Error] Get Stream URL:', error.message);
-    // Обрабатываем как сетевые ошибки, так и нашу собственную
     return { success: false, error: error.message };
   }
 });
@@ -142,6 +140,21 @@ ipcMain.handle('maximize-window', () => {
 
 ipcMain.handle('close-window', () => {
   mainWindow?.close();
+});
+
+ipcMain.handle('get-lyrics', async (event, artist, title) => {
+  try {
+    const params = new URLSearchParams({ artist, title });
+    // [ИСПРАВЛЕНО] Запрос на /api/?artist=...&title=...
+    const response = await apiClient.get(`/lyrics?${params}`);
+    if (response.data) {
+      return { success: true, data: response.data };
+    }
+    throw new Error('Lyrics not found in API response.');
+  } catch (error) {
+    console.error('[Main Process Error] Get Lyrics:', error.message);
+    return { success: false, error: error.message };
+  }
 });
 
 // --- КОНЕЦ СЕКЦИИ IPC ОБРАБОТЧИКОВ ---
