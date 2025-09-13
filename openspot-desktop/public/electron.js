@@ -7,7 +7,7 @@ const axios = require('axios'); // Добавляем axios для сетевы�
 const Store = require('electron-store');
 const store = new Store();
 
-let mainWindow;
+let mainWindow
 
 // --- СЕКЦИЯ API ЛОГИКИ (ПЕРЕНЕСЕНО ИЗ music-api.ts) ---
 // Делаем запросы из main-процесса, чтобы обойти ограничения CORS в renderer-процессе

@@ -4,9 +4,11 @@ import React, { useEffect, useState } from 'react';
 import { Box, Typography, Button, CardMedia, Stack, Alert, CircularProgress } from '@mui/material';
 import { GitHub, Update, CheckCircle } from '@mui/icons-material';
 
+const isElectron = typeof window.electronAPI !== 'undefined';
+
 // [ПЕРСОНАЛИЗАЦИЯ] Ссылки теперь указывают на ваш форк
-const RELEASES_URL = 'https://github.com/ruslan/openspot-music-app_snwt/releases';
-const GITHUB_REPO_URL = 'https://github.com/ruslan/openspot-music-app_snwt';
+const RELEASES_URL = 'https://github.com/SNWT777-u/openspot-music-app_snwt/releases';
+const GITHUB_REPO_URL = 'https://github.com/SNWT777-u/openspot-music-app_snwt';
 
 const About: React.FC = () => {
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -21,7 +23,11 @@ const About: React.FC = () => {
         setCheckingUpdate(true);
         setUpdateError(null);
 
-        const currentVersion = await window.electronAPI.getAppVersion();
+        const currentVersion = isElectron
+          ? await window.electronAPI.getAppVersion()
+          // create-react-app автоматически предоставляет версию из package.json
+          : process.env.REACT_APP_VERSION || '2.1.0-web';
+
         setAppVersion(currentVersion);
 
         // [ПЕРСОНАЛИЗАЦИЯ] API-запрос к вашему форку
@@ -89,7 +95,7 @@ const About: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, padding: '16px', backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: '12px', width: '100%', justifyContent: 'space-between' }}>
           <Typography variant="body2" sx={{ color: '#b3b3b3' }}>Current Version:</Typography>
           <Typography variant="body2" sx={{ color: '#1db954', fontWeight: 600 }}>
-            {appVersion ? `v${appVersion}` : 'Loading...'}
+            {appVersion ? `v${appVersion}${isElectron ? '' : ' (Web)'}` : 'Loading...'}
           </Typography>
         </Box>
 
