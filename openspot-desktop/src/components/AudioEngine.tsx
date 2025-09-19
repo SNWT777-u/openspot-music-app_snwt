@@ -1,14 +1,13 @@
-// src/components/AudioEngine.tsx
-
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useMusic } from '../contexts/MusicContext';
 import { apiService } from '../lib/apiService';
 
-// Константы для улучшения читаемости и управления
+// Constants for better readability and management
 const CROSSFADE_STEPS_PER_SECOND = 20;
 const CROSSFADE_INTERVAL_MS = 1000 / CROSSFADE_STEPS_PER_SECOND;
-const SEEK_THRESHOLD = 1.5; // Порог для определения необходимости перемотки
-const PRELOAD_DELAY_MS = 500; // Задержка перед предзагрузкой для экономии ресурсов
+const SEEK_THRESHOLD = 1.5; // Threshold for seeking
+const PRELOAD_DELAY_MS = 500; // Delay before preloading to save resources
+const SEEK_DEBOUNCE_MS = 250; // Debounce for seeking to prevent thrashing
 
 interface AudioState {
   isLoading: boolean;
@@ -16,7 +15,7 @@ interface AudioState {
   errorMessage?: string;
 }
 
-const easeOutQuad = (t: number) => t * (2 - t);
+const easeOutQuad = (t: number): number => t * (2 - t);
 
 const AudioEngine: React.FC = () => {
   const { state, dispatch } = useMusic();
@@ -30,43 +29,46 @@ const AudioEngine: React.FC = () => {
     shuffledQueue,
     isShuffled,
     currentIndex,
-    repeatMode
+    repeatMode,
   } = state;
 
-  // Рефы для аудио элементов
+  // Refs for audio elements
   const player1Ref = useRef<HTMLAudioElement>(null);
   const player2Ref = useRef<HTMLAudioElement>(null);
 
-  // Рефы для управления состоянием
+  // Refs for state management
   const fadeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isFadingRef = useRef<boolean>(false);
   const preloadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastSeekTimeRef = useRef<number>(0);
 
-  // Состояния компонента
+  // Component states
   const [activePlayerKey, setActivePlayerKey] = useState<'p1' | 'p2'>('p1');
   const [nextTrackUrl, setNextTrackUrl] = useState<string | null>(null);
   const [audioState, setAudioState] = useState<AudioState>({
     isLoading: false,
-    hasError: false
+    hasError: false,
   });
 
-  // Мемоизированные значения
-  const players = useMemo(() => ({
-    p1: player1Ref.current,
-    p2: player2Ref.current
-  }), [player1Ref.current, player2Ref.current]);
+  // Memoized values
+  const players = useMemo(
+    () => ({
+      p1: player1Ref.current,
+      p2: player2Ref.current,
+    }),
+    [] // Refs don't change, so empty dependency
+  );
 
   const activeAudio = players[activePlayerKey];
   const standbyAudio = players[activePlayerKey === 'p1' ? 'p2' : 'p1'];
 
-  const currentQueue = useMemo(() =>
-    isShuffled ? shuffledQueue : queue,
+  const currentQueue = useMemo(
+    () => (isShuffled ? shuffledQueue : queue),
     [isShuffled, shuffledQueue, queue]
   );
 
-  // === ФУНКЦИЯ: Вычисление индекса следующего трека ===
-  const getNextTrackIndex = useCallback(() => {
+  // === FUNCTION: Calculate next track index ===
+  const getNextTrackIndex = useCallback((): number | null => {
     if (currentQueue.length < 2) return null;
 
     let nextIndex = currentIndex + 1;
@@ -84,9 +86,9 @@ const AudioEngine: React.FC = () => {
     return nextIndex;
   }, [currentIndex, currentQueue.length, repeatMode]);
 
-  // === ФУНКЦИЯ: Безопасная предзагрузка следующего трека ===
+  // === FUNCTION: Safely preload next track ===
   const preloadNextTrack = useCallback(async () => {
-    // Очищаем предыдущий таймаут если есть
+    // Clear previous timeout if exists
     if (preloadTimeoutRef.current) {
       clearTimeout(preloadTimeoutRef.current);
       preloadTimeoutRef.current = null;
@@ -99,67 +101,76 @@ const AudioEngine: React.FC = () => {
       return;
     }
 
-    // Добавляем небольшую задержку для оптимизации
+    // Add a small delay for optimization
     preloadTimeoutRef.current = setTimeout(async () => {
       try {
         const url = await apiService.getStreamUrl(currentQueue[nextIndex].id);
         setNextTrackUrl(url);
 
-        // Предзагружаем аудио в standby плеер если возможно
+        // Preload audio in standby player if crossfade is enabled
         if (standbyAudio && settings.crossfade > 0) {
           standbyAudio.src = url;
           standbyAudio.load();
         }
       } catch (error) {
-        console.error("AudioEngine: Failed to preload next track", error);
+        console.error('AudioEngine: Failed to preload next track', error);
         setNextTrackUrl(null);
       }
     }, PRELOAD_DELAY_MS);
   }, [currentQueue, getNextTrackIndex, standbyAudio, settings.crossfade]);
 
-  // === ФУНКЦИЯ: Остановка кроссфейда ===
+  // === FUNCTION: Stop crossfade ===
   const stopCrossfade = useCallback(() => {
     if (fadeIntervalRef.current) {
       clearInterval(fadeIntervalRef.current);
       fadeIntervalRef.current = null;
     }
     isFadingRef.current = false;
-  }, []);
 
-  // === ФУНКЦИЯ: Запуск кроссфейда ===
+    // Reset volumes after crossfade
+    if (activeAudio) activeAudio.volume = volume;
+    if (standbyAudio) standbyAudio.volume = 0;
+  }, [activeAudio, standbyAudio, volume]);
+
+  // === FUNCTION: Start crossfade ===
   const startCrossfade = useCallback(() => {
-        if (!nextTrackUrl || !activeAudio || !standbyAudio || isFadingRef.current) return;
+    if (!nextTrackUrl || !activeAudio || !standbyAudio || isFadingRef.current) return;
 
     const crossfadeDuration = settings.crossfade;
-        if (crossfadeDuration <= 0) return;
+    if (crossfadeDuration <= 0) return;
 
-        isFadingRef.current = true;
-        console.log("AudioEngine: Starting Smooth Crossfade...");
+    isFadingRef.current = true;
+    console.log('AudioEngine: Starting Smooth Crossfade...');
 
-        standbyAudio.src = nextTrackUrl;
-        standbyAudio.volume = 0;
-        standbyAudio.play().catch(console.error);
+    standbyAudio.src = nextTrackUrl;
+    standbyAudio.volume = 0;
+    standbyAudio.play().catch(console.error);
 
-        const startTime = Date.now();
+    const startTime = Date.now();
 
-        fadeIntervalRef.current = setInterval(() => {
-            const elapsedTime = (Date.now() - startTime) / 1000;
-            const progress = Math.min(elapsedTime / crossfadeDuration, 1);
+    fadeIntervalRef.current = setInterval(() => {
+      const elapsedTime = (Date.now() - startTime) / 1000;
+      const progress = Math.min(elapsedTime / crossfadeDuration, 1);
 
-            // [ИЗМЕНЕНО] Используем easing-функцию для плавности
-            const easedProgress = easeOutQuad(progress);
+      // Use easing function for smoothness
+      const easedProgress = easeOutQuad(progress);
 
-            if (activeAudio) activeAudio.volume = volume * (1 - easedProgress);
-            if (standbyAudio) standbyAudio.volume = volume * easedProgress;
+      if (activeAudio) activeAudio.volume = volume * (1 - easedProgress);
+      if (standbyAudio) standbyAudio.volume = volume * easedProgress;
 
-            if (progress >= 1) {
-                stopCrossfade();
-                dispatch({ type: 'NEXT_TRACK' });
-            }
-        }, CROSSFADE_INTERVAL_MS);
-    }, [nextTrackUrl, activeAudio, standbyAudio, settings.crossfade, volume, stopCrossfade, dispatch]);
+      if (progress >= 1) {
+        stopCrossfade();
+        // Switch players
+        setActivePlayerKey(activePlayerKey === 'p1' ? 'p2' : 'p1');
+        dispatch({ type: 'NEXT_TRACK' });
+        // Pause and reset the old active player
+        activeAudio.pause();
+        activeAudio.currentTime = 0;
+      }
+    }, CROSSFADE_INTERVAL_MS);
+  }, [nextTrackUrl, activeAudio, standbyAudio, settings.crossfade, volume, stopCrossfade, dispatch, activePlayerKey]);
 
-  // === ЭФФЕКТ: Предзагрузка следующего трека ===
+  // === EFFECT: Preload next track ===
   useEffect(() => {
     preloadNextTrack();
 
@@ -170,61 +181,54 @@ const AudioEngine: React.FC = () => {
     };
   }, [preloadNextTrack]);
 
-  // === ЭФФЕКТ: Загрузка текущего трека ===
+  // === EFFECT: Load current track ===
   useEffect(() => {
     if (!currentTrack) return;
 
-    let isMounted = true;
-
     const loadTrack = async () => {
+      dispatch({ type: 'SET_LOADING', payload: true });
       setAudioState({ isLoading: true, hasError: false });
 
       try {
         const url = await apiService.getStreamUrl(currentTrack.id);
 
-        if (!isMounted) return;
-
-        // Определяем какой плеер использовать
+        // Determine which player to use
         const playerToUse = isFadingRef.current ? activeAudio : standbyAudio;
-        const newPlayerKey = isFadingRef.current ? activePlayerKey : (activePlayerKey === 'p1' ? 'p2' : 'p1');
+        const newPlayerKey = isFadingRef.current ? activePlayerKey : activePlayerKey === 'p1' ? 'p2' : 'p1';
 
         if (playerToUse) {
           playerToUse.src = url;
           playerToUse.load();
 
-          // Если не в процессе кроссфейда, переключаемся сразу
+          // If not in crossfade, switch immediately
           if (!isFadingRef.current) {
             setActivePlayerKey(newPlayerKey);
           }
         }
 
         setAudioState({ isLoading: false, hasError: false });
+        dispatch({ type: 'SET_LOADING', payload: false });
       } catch (error) {
-        console.error("AudioEngine: Failed to load track", error);
+        console.error('AudioEngine: Failed to load track', error);
+        setAudioState({
+          isLoading: false,
+          hasError: true,
+          errorMessage: 'Failed to load track',
+        });
+        dispatch({ type: 'SET_ERROR', payload: 'Failed to load track' });
+        dispatch({ type: 'SET_LOADING', payload: false });
 
-        if (isMounted) {
-          setAudioState({
-            isLoading: false,
-            hasError: true,
-            errorMessage: 'Failed to load track'
-          });
-
-          // Пробуем следующий трек через 2 секунды
-          setTimeout(() => {
-            dispatch({ type: 'NEXT_TRACK' });
-          }, 2000);
-        }
+        // Try next track after 2 seconds
+        setTimeout(() => {
+          dispatch({ type: 'NEXT_TRACK' });
+        }, 2000);
       }
     };
 
     loadTrack();
+  }, [currentTrack?.id, dispatch, activeAudio, standbyAudio, activePlayerKey]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [currentTrack?.id]); // Зависим только от ID трека
-
-  // === ЭФФЕКТ: Управление воспроизведением ===
+  // === EFFECT: Manage playback ===
   useEffect(() => {
     if (!activeAudio || audioState.isLoading) return;
 
@@ -232,25 +236,29 @@ const AudioEngine: React.FC = () => {
 
     activeAudio.volume = volume;
 
-    // Управление воспроизведением
+    // Manage play/pause
     if (isPlaying && activeAudio.paused) {
       activeAudio.play().catch((error) => {
-        console.error("AudioEngine: Playback failed", error);
+        console.error('AudioEngine: Playback failed', error);
         dispatch({ type: 'SET_IS_PLAYING', payload: false });
+        dispatch({ type: 'SET_ERROR', payload: 'Playback failed' });
       });
     } else if (!isPlaying && !activeAudio.paused) {
       activeAudio.pause();
     }
 
-    // Управление перемоткой (с защитой от частых обновлений)
+    // Manage seeking with debounce
     const now = Date.now();
-        if (Math.abs(activeAudio.currentTime - currentTime) > SEEK_THRESHOLD && now - lastSeekTimeRef.current > 250) {
-            activeAudio.currentTime = currentTime;
-            lastSeekTimeRef.current = now;
-        }
-    }, [isPlaying, volume, currentTime, activeAudio, audioState.isLoading]);
+    if (
+      Math.abs(activeAudio.currentTime - currentTime) > SEEK_THRESHOLD &&
+      now - lastSeekTimeRef.current > SEEK_DEBOUNCE_MS
+    ) {
+      activeAudio.currentTime = currentTime;
+      lastSeekTimeRef.current = now;
+    }
+  }, [isPlaying, volume, currentTime, activeAudio, audioState.isLoading, dispatch]);
 
-  // === ЭФФЕКТ: События активного плеера ===
+  // === EFFECT: Active player events ===
   useEffect(() => {
     if (!activeAudio) return;
 
@@ -260,12 +268,14 @@ const AudioEngine: React.FC = () => {
 
       dispatch({ type: 'SET_CURRENT_TIME', payload: time });
 
-      // Проверка условий для кроссфейда
-      if (settings.crossfade > 0 &&
-          duration &&
-          !isFadingRef.current &&
-          nextTrackUrl &&
-          time > duration - settings.crossfade) {
+      // Check for crossfade conditions
+      if (
+        settings.crossfade > 0 &&
+        duration &&
+        !isFadingRef.current &&
+        nextTrackUrl &&
+        time > duration - settings.crossfade - 0.5 // Small buffer
+      ) {
         startCrossfade();
       }
     };
@@ -286,28 +296,31 @@ const AudioEngine: React.FC = () => {
     };
 
     const handleError = (e: Event) => {
-      console.error("AudioEngine: Playback error", e);
+      console.error('AudioEngine: Playback error', e);
       setAudioState({
         isLoading: false,
         hasError: true,
-        errorMessage: 'Playback error occurred'
+        errorMessage: 'Playback error occurred',
       });
+      dispatch({ type: 'SET_ERROR', payload: 'Playback error occurred' });
 
-      // Автоматически переходим к следующему треку при ошибке
+      // Automatically skip to next track on error
       setTimeout(() => {
         dispatch({ type: 'NEXT_TRACK' });
       }, 1000);
     };
 
     const handleCanPlay = () => {
-      setAudioState(prev => ({ ...prev, isLoading: false }));
+      setAudioState((prev) => ({ ...prev, isLoading: false }));
+      dispatch({ type: 'SET_LOADING', payload: false });
     };
 
     const handleWaiting = () => {
-      setAudioState(prev => ({ ...prev, isLoading: true }));
+      setAudioState((prev) => ({ ...prev, isLoading: true }));
+      dispatch({ type: 'SET_LOADING', payload: true });
     };
 
-    // Подписываемся на события
+    // Attach event listeners
     activeAudio.addEventListener('timeupdate', handleTimeUpdate);
     activeAudio.addEventListener('ended', handleEnded);
     activeAudio.addEventListener('loadedmetadata', handleLoadedMetadata);
@@ -315,7 +328,7 @@ const AudioEngine: React.FC = () => {
     activeAudio.addEventListener('canplay', handleCanPlay);
     activeAudio.addEventListener('waiting', handleWaiting);
 
-    // Очистка
+    // Cleanup
     return () => {
       activeAudio.removeEventListener('timeupdate', handleTimeUpdate);
       activeAudio.removeEventListener('ended', handleEnded);
@@ -326,35 +339,33 @@ const AudioEngine: React.FC = () => {
     };
   }, [activeAudio, dispatch, settings.crossfade, nextTrackUrl, startCrossfade, repeatMode]);
 
-  // === ЭФФЕКТ: Очистка при размонтировании ===
+  // === EFFECT: Cleanup on unmount ===
   useEffect(() => {
     return () => {
       stopCrossfade();
       if (preloadTimeoutRef.current) {
         clearTimeout(preloadTimeoutRef.current);
       }
+      // Pause both players
+      if (player1Ref.current) player1Ref.current.pause();
+      if (player2Ref.current) player2Ref.current.pause();
     };
   }, [stopCrossfade]);
 
-  // Опционально: можно передавать состояние загрузки/ошибки в контекст
+  // Sync local audioState to global if needed
   useEffect(() => {
-    if (audioState.hasError || audioState.isLoading) {
-      // dispatch({ type: 'SET_LOADING_STATE', payload: audioState });
+    if (audioState.hasError) {
+      dispatch({ type: 'SET_ERROR', payload: audioState.errorMessage || 'Audio error' });
     }
-  }, [audioState]);
+    if (audioState.isLoading !== state.isLoading) {
+      dispatch({ type: 'SET_LOADING', payload: audioState.isLoading });
+    }
+  }, [audioState, dispatch, state.isLoading]);
 
   return (
     <>
-      <audio
-        ref={player1Ref}
-        preload="auto"
-        onContextMenu={(e) => e.preventDefault()}
-      />
-      <audio
-        ref={player2Ref}
-        preload="auto"
-        onContextMenu={(e) => e.preventDefault()}
-      />
+      <audio ref={player1Ref} preload="auto" />
+      <audio ref={player2Ref} preload="auto" />
     </>
   );
 };
