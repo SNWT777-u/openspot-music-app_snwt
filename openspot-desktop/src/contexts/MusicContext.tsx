@@ -1,15 +1,19 @@
-import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useReducer, ReactNode, useEffect, useMemo, useCallback } from 'react';
+import { debounce } from 'lodash';
 
 // Types
-
 export interface Settings {
-  crossfade: number; // Длительность кроссфейда в секундах
+  crossfade: number;
+  theme?: 'light' | 'dark';
+  playbackQuality?: 'low' | 'medium' | 'high';
 }
 
 export interface Playlist {
-  id: string; // Уникальный ID, например, `playlist_1678886400000`
+  id: string;
   name: string;
   tracks: Track[];
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface Track {
@@ -21,6 +25,7 @@ export interface Track {
   coverUrl: string;
   audioUrl: string;
   liked: boolean;
+  addedAt?: number;
 }
 
 export interface MusicState {
@@ -39,6 +44,8 @@ export interface MusicState {
   isFullScreenPlayerOpen: boolean;
   settings: Settings;
   playlists: Playlist[];
+  isLoading: boolean;
+  error: string | null;
 }
 
 // Actions
@@ -60,13 +67,16 @@ export type MusicAction =
   | { type: 'OPEN_FULLSCREEN_PLAYER' }
   | { type: 'CLOSE_FULLSCREEN_PLAYER' }
   | { type: 'UPDATE_SETTINGS'; payload: Partial<Settings> }
-  | { type: 'CREATE_PLAYLIST'; payload: string } // payload = имя плейлиста
-  | { type: 'DELETE_PLAYLIST'; payload: string } // payload = ID плейлиста
+  | { type: 'CREATE_PLAYLIST'; payload: string }
+  | { type: 'DELETE_PLAYLIST'; payload: string }
   | { type: 'ADD_TRACK_TO_PLAYLIST'; payload: { playlistId: string; track: Track } }
+  | { type: 'REMOVE_TRACK_FROM_PLAYLIST'; payload: { playlistId: string; trackId: string } }
   | { type: 'LOAD_SETTINGS'; payload: Settings }
-    | { type: 'SET_IS_PLAYING'; payload: boolean }
-  | { type: 'LOAD_PLAYLISTS'; payload: Playlist[] };
-
+  | { type: 'SET_IS_PLAYING'; payload: boolean }
+  | { type: 'LOAD_PLAYLISTS'; payload: Playlist[] }
+  | { type: 'SET_ERROR'; payload: string }
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'SET_LOADING'; payload: boolean };
 
 // Initial state
 const initialState: MusicState = {
@@ -84,19 +94,22 @@ const initialState: MusicState = {
   recentlyPlayed: [],
   isFullScreenPlayerOpen: false,
   settings: {
-    crossfade: 3, // По умолчанию 3 секунды, 0 - выключено
+    crossfade: 3,
+    theme: 'dark',
+    playbackQuality: 'medium',
   },
   playlists: [],
+  isLoading: false,
+  error: null,
 };
 
-// Reducer
+// Utility functions
 const shuffleArray = (array: Track[], currentTrackId?: string): Track[] => {
-  const arr = array.slice();
+  const arr = [...array];
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  // Ensure current track stays at the same index if possible
   if (currentTrackId) {
     const idx = arr.findIndex(t => t.id === currentTrackId);
     if (idx > 0) {
@@ -107,34 +120,34 @@ const shuffleArray = (array: Track[], currentTrackId?: string): Track[] => {
   return arr;
 };
 
+// Reducer
 const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
   switch (action.type) {
     case 'SET_CURRENT_TRACK': {
-      let currentIndex = 0;
-      if (state.isShuffled && state.shuffledQueue.length > 0) {
-        currentIndex = state.shuffledQueue.findIndex(t => t.id === action.payload.id);
-      } else {
-        currentIndex = state.queue.findIndex(t => t.id === action.payload.id);
-      }
+      const queue = state.isShuffled ? state.shuffledQueue : state.queue;
+      const currentIndex = queue.findIndex(t => t.id === action.payload.id);
       return {
         ...state,
         currentTrack: action.payload,
-        isPlaying: state.isPlaying,
-        currentIndex,
+        currentIndex: currentIndex >= 0 ? currentIndex : state.currentIndex,
+        currentTime: 0,
       };
     }
 
     case 'TOGGLE_PLAY_PAUSE':
       return { ...state, isPlaying: !state.isPlaying };
 
+    case 'SET_IS_PLAYING':
+      return { ...state, isPlaying: action.payload };
+
     case 'SET_VOLUME':
-      return { ...state, volume: action.payload };
+      return { ...state, volume: Math.max(0, Math.min(1, action.payload)) };
 
     case 'SET_CURRENT_TIME':
-      return { ...state, currentTime: action.payload };
+      return { ...state, currentTime: Math.max(0, action.payload) };
 
     case 'SET_DURATION':
-      return { ...state, duration: action.payload };
+      return { ...state, duration: Math.max(0, action.payload) };
 
     case 'SET_QUEUE': {
       const shuffled = state.isShuffled ? shuffleArray(action.payload, state.currentTrack?.id) : [];
@@ -143,7 +156,7 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
 
     case 'NEXT_TRACK': {
       const queue = state.isShuffled ? state.shuffledQueue : state.queue;
-      if (queue.length === 0) return state;
+      if (queue.length === 0) return { ...state, isPlaying: false };
       let nextIndex = state.currentIndex + 1;
       if (nextIndex >= queue.length) {
         if (state.repeatMode === 'playlist') {
@@ -153,14 +166,13 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
         }
       }
       const nextTrack = queue[nextIndex];
-      const recentlyPlayed = [nextTrack, ...state.recentlyPlayed.filter(t => t.id !== nextTrack.id)];
       return {
         ...state,
         currentIndex: nextIndex,
         currentTrack: nextTrack,
         currentTime: 0,
         isPlaying: true,
-        recentlyPlayed: recentlyPlayed.slice(0, 50),
+        recentlyPlayed: [nextTrack, ...state.recentlyPlayed.filter(t => t.id !== nextTrack.id)].slice(0, 50),
       };
     }
 
@@ -169,55 +181,44 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
       if (queue.length === 0) return state;
       let prevIndex = state.currentIndex - 1;
       if (prevIndex < 0) {
-        if (state.repeatMode === 'playlist') {
-          prevIndex = queue.length - 1;
-        } else {
-          prevIndex = 0;
-        }
+        prevIndex = state.repeatMode === 'playlist' ? queue.length - 1 : 0;
       }
       const prevTrack = queue[prevIndex];
-      const recentlyPlayed = [prevTrack, ...state.recentlyPlayed.filter(t => t.id !== prevTrack.id)];
       return {
         ...state,
         currentIndex: prevIndex,
         currentTrack: prevTrack,
         currentTime: 0,
         isPlaying: true,
-        recentlyPlayed: recentlyPlayed.slice(0, 50),
+        recentlyPlayed: [prevTrack, ...state.recentlyPlayed.filter(t => t.id !== prevTrack.id)].slice(0, 50),
       };
     }
 
     case 'TOGGLE_SHUFFLE': {
       const isShuffled = !state.isShuffled;
-      let shuffledQueue = state.shuffledQueue;
-      let currentIndex = state.currentIndex;
-      if (isShuffled) {
-        shuffledQueue = shuffleArray(state.queue, state.currentTrack?.id);
-        currentIndex = shuffledQueue.findIndex(t => t.id === state.currentTrack?.id);
-      } else {
-        currentIndex = state.queue.findIndex(t => t.id === state.currentTrack?.id);
-      }
+      const shuffledQueue = isShuffled ? shuffleArray(state.queue, state.currentTrack?.id) : [];
+      const currentIndex = isShuffled
+        ? shuffledQueue.findIndex(t => t.id === state.currentTrack?.id) || 0
+        : state.queue.findIndex(t => t.id === state.currentTrack?.id) || 0;
       return { ...state, isShuffled, shuffledQueue, currentIndex };
     }
-
-    case 'SET_IS_PLAYING':
-      return { ...state, isPlaying: action.payload };
 
     case 'SET_REPEAT_MODE':
       return { ...state, repeatMode: action.payload };
 
     case 'TOGGLE_LIKE_TRACK': {
-      const track = action.payload;
-      const isLiked = state.likedTracks.some(t => t.id === track.id);
-      if (isLiked) {
-        return { ...state, likedTracks: state.likedTracks.filter(t => t.id !== track.id) };
-      }
-      return { ...state, likedTracks: [...state.likedTracks, { ...track, liked: true }] };
+      const track = { ...action.payload, liked: !action.payload.liked };
+      const likedTracks = track.liked
+        ? [...state.likedTracks, track]
+        : state.likedTracks.filter(t => t.id !== track.id);
+      return { ...state, likedTracks };
     }
 
     case 'ADD_TO_RECENTLY_PLAYED': {
-      const recentlyPlayed = [action.payload, ...state.recentlyPlayed.filter(t => t.id !== action.payload.id)];
-      return { ...state, recentlyPlayed: recentlyPlayed.slice(0, 50) };
+      return {
+        ...state,
+        recentlyPlayed: [action.payload, ...state.recentlyPlayed.filter(t => t.id !== action.payload.id)].slice(0, 50),
+      };
     }
 
     case 'LOAD_LIKED_TRACKS':
@@ -236,7 +237,14 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
       return { ...state, settings: { ...state.settings, ...action.payload } };
 
     case 'CREATE_PLAYLIST': {
-      const newPlaylist: Playlist = { id: `playlist_${Date.now()}`, name: action.payload, tracks: [] };
+      const timestamp = Date.now();
+      const newPlaylist: Playlist = {
+        id: `playlist_${timestamp}`,
+        name: action.payload,
+        tracks: [],
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      };
       return { ...state, playlists: [...state.playlists, newPlaylist] };
     }
 
@@ -246,15 +254,28 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
     case 'ADD_TRACK_TO_PLAYLIST': {
       return {
         ...state,
-        playlists: state.playlists.map(playlist => {
-          if (playlist.id === action.payload.playlistId) {
-            if (playlist.tracks.some(t => t.id === action.payload.track.id)) {
-              return playlist;
-            }
-            return { ...playlist, tracks: [...playlist.tracks, action.payload.track] };
-          }
-          return playlist;
-        }),
+        playlists: state.playlists.map(playlist =>
+          playlist.id === action.payload.playlistId
+            ? {
+                ...playlist,
+                tracks: playlist.tracks.some(t => t.id === action.payload.track.id)
+                  ? playlist.tracks
+                  : [...playlist.tracks, { ...action.payload.track, addedAt: Date.now() }],
+                updatedAt: Date.now(),
+              }
+            : playlist
+        ),
+      };
+    }
+
+    case 'REMOVE_TRACK_FROM_PLAYLIST': {
+      return {
+        ...state,
+        playlists: state.playlists.map(playlist =>
+          playlist.id === action.payload.playlistId
+            ? { ...playlist, tracks: playlist.tracks.filter(t => t.id !== action.payload.trackId), updatedAt: Date.now() }
+            : playlist
+        ),
       };
     }
 
@@ -264,104 +285,120 @@ const musicReducer = (state: MusicState, action: MusicAction): MusicState => {
     case 'LOAD_PLAYLISTS':
       return { ...state, playlists: action.payload };
 
+    case 'SET_ERROR':
+      return { ...state, error: action.payload };
+
+    case 'CLEAR_ERROR':
+      return { ...state, error: null };
+
+    case 'SET_LOADING':
+      return { ...state, isLoading: action.payload };
+
     default:
       return state;
   }
 };
 
 // Context
-const MusicContext = createContext<{
+interface MusicContextType {
   state: MusicState;
   dispatch: React.Dispatch<MusicAction>;
-} | undefined>(undefined);
+}
+
+const MusicContext = createContext<MusicContextType | undefined>(undefined);
 
 // Provider
 export const MusicProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(musicReducer, initialState);
-  
-  // Load persisted data on mount
-  // Загрузка всех данных при старте
-  useEffect(() => {
 
-     const loadPersistedData = async () => {
+  // Debounced save function
+  const saveToStore = useCallback(
+    debounce(async (key: string, value: any) => {
       try {
-        if (!window.electronAPI) return;
-        // Загружаем настройки
-        const savedSettings = await window.electronAPI.getStoreValue('settings');
-        if (savedSettings) {
-          dispatch({ type: 'LOAD_SETTINGS', payload: savedSettings });
-        }
-
-        // Загружаем плейлисты
-        const savedPlaylists = await window.electronAPI.getStoreValue('playlists');
-        if (savedPlaylists && Array.isArray(savedPlaylists)) {
-          dispatch({ type: 'LOAD_PLAYLISTS', payload: savedPlaylists });
-        }
-        
-        // Load recently played
-        const savedRecentlyPlayed = await window.electronAPI.getStoreValue('recentlyPlayed');
-        if (savedRecentlyPlayed && Array.isArray(savedRecentlyPlayed)) {
-          dispatch({ type: 'LOAD_RECENTLY_PLAYED', payload: savedRecentlyPlayed });
+        if (window.electronAPI) {
+          await window.electronAPI.setStoreValue(key, value);
         }
       } catch (error) {
-        console.error('Failed to load persisted data:', error);
+        dispatch({ type: 'SET_ERROR', payload: `Failed to save ${key}: ${error}` });
+      }
+    }, 500),
+    []
+  );
+
+  // Load persisted data
+  useEffect(() => {
+    let mounted = true;
+
+    const loadPersistedData = async () => {
+      if (!window.electronAPI || !mounted) return;
+
+      dispatch({ type: 'SET_LOADING', payload: true });
+      try {
+        const [settings, playlists, likedTracks, recentlyPlayed] = await Promise.all([
+          window.electronAPI.getStoreValue('settings'),
+          window.electronAPI.getStoreValue('playlists'),
+          window.electronAPI.getStoreValue('likedTracks'),
+          window.electronAPI.getStoreValue('recentlyPlayed'),
+        ]);
+
+        if (settings && mounted) {
+          dispatch({ type: 'LOAD_SETTINGS', payload: settings });
+        }
+        if (playlists && Array.isArray(playlists) && mounted) {
+          dispatch({ type: 'LOAD_PLAYLISTS', payload: playlists });
+        }
+        if (likedTracks && Array.isArray(likedTracks) && mounted) {
+          dispatch({ type: 'LOAD_LIKED_TRACKS', payload: likedTracks });
+        }
+        if (recentlyPlayed && Array.isArray(recentlyPlayed) && mounted) {
+          dispatch({ type: 'LOAD_RECENTLY_PLAYED', payload: recentlyPlayed });
+        }
+      } catch (error) {
+        if (mounted) {
+          dispatch({ type: 'SET_ERROR', payload: `Failed to load persisted data: ${error}` });
+        }
+      } finally {
+        if (mounted) {
+          dispatch({ type: 'SET_LOADING', payload: false });
+        }
       }
     };
-    
+
     loadPersistedData();
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
-  // Сохранение настроек при их изменении
+  // Save state changes
   useEffect(() => {
-    if (state.settings !== initialState.settings && window.electronAPI) {
-      window.electronAPI.setStoreValue('settings', state.settings);
+    if (state.settings !== initialState.settings) {
+      saveToStore('settings', state.settings);
     }
-  }, [state.settings]);
+  }, [state.settings, saveToStore]);
 
-  // Сохранение плейлистов при их изменении
   useEffect(() => {
-    if (state.playlists !== initialState.playlists && window.electronAPI) {
-      window.electronAPI.setStoreValue('playlists', state.playlists);
+    if (state.playlists !== initialState.playlists) {
+      saveToStore('playlists', state.playlists);
     }
-  }, [state.playlists]);
-  
-  // Save liked tracks whenever they change
+  }, [state.playlists, saveToStore]);
+
   useEffect(() => {
-    const saveLikedTracks = async () => {
-      try {
-        await window.electronAPI.setStoreValue('likedTracks', state.likedTracks);
-      } catch (error) {
-        console.error('Failed to save liked tracks:', error);
-      }
-    };
-    
-    // Only save if we have liked tracks (avoid saving empty array on initial load)
-    if (state.likedTracks.length > 0 || state.likedTracks !== initialState.likedTracks) {
-      saveLikedTracks();
+    if (state.likedTracks.length > 0) {
+      saveToStore('likedTracks', state.likedTracks);
     }
-  }, [state.likedTracks]);
-  
-  // Save recently played whenever they change
+  }, [state.likedTracks, saveToStore]);
+
   useEffect(() => {
-    const saveRecentlyPlayed = async () => {
-      try {
-        await window.electronAPI.setStoreValue('recentlyPlayed', state.recentlyPlayed);
-      } catch (error) {
-        console.error('Failed to save recently played:', error);
-      }
-    };
-    
-    // Only save if we have recently played tracks (avoid saving empty array on initial load)
-    if (state.recentlyPlayed.length > 0 || state.recentlyPlayed !== initialState.recentlyPlayed) {
-      saveRecentlyPlayed();
+    if (state.recentlyPlayed.length > 0) {
+      saveToStore('recentlyPlayed', state.recentlyPlayed);
     }
-  }, [state.recentlyPlayed]);
-  
-  return (
-    <MusicContext.Provider value={{ state, dispatch }}>
-      {children}
-    </MusicContext.Provider>
-  );
+  }, [state.recentlyPlayed, saveToStore]);
+
+  const contextValue = useMemo(() => ({ state, dispatch }), [state]);
+
+  return <MusicContext.Provider value={contextValue}>{children}</MusicContext.Provider>;
 };
 
 // Hook
@@ -371,4 +408,4 @@ export const useMusic = () => {
     throw new Error('useMusic must be used within a MusicProvider');
   }
   return context;
-}; 
+};
